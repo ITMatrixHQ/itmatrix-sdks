@@ -1,0 +1,12 @@
+{
+  "name": "itmatrix-sdks-ts",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "gen": "bash ../scripts/gen-ts.sh",
+    "typecheck": "npm run typecheck -ws && tsc --noEmit -p examples/tsconfig.json",
+    "test": "npm run test -ws"
+  }
+}

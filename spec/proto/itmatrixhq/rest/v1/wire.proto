@@ -1,0 +1,164 @@
+// itmatrixhq.rest.v1 — PUBLIC protobuf bodies for negotiated REST responses.
+//
+// External SDKs request these with Accept: application/x-protobuf on the
+// high-volume reads (bars / replay / gex grid / chain); JSON remains the
+// default. Errors stay JSON on every transport. Field conventions: scaled
+// sint32 prices (PRICE_SCALE = 10000), epoch-ms timestamps, absent = unset
+// (proto3 optional), strikes in thousandths.
+syntax = "proto3";
+
+package itmatrixhq.rest.v1;
+
+message BarsResponse {
+  uint32 price_scale = 1;
+  optional uint64 complete_through_ms = 2;
+  optional sint32 prior_close_scaled = 3;
+  repeated Bar bars = 4;
+  // Opaque pagination cursor; presence means more data remains.
+  string cursor = 5;
+}
+
+message Bar {
+  uint64 ts_ms = 1;
+  sint32 o = 2;
+  sint32 h = 3;
+  sint32 l = 4;
+  sint32 c = 5;
+  optional uint32 v = 6;
+  optional sint32 vwap = 7;
+  optional uint32 n = 8;
+}
+
+message ReplayResponse {
+  uint32 price_scale = 1;
+  uint32 fidelity = 2; // 0 = ticks, 1 = bars1m
+  bool complete = 3;
+  repeated string sources = 4; // tick source names (fidelity = ticks)
+  repeated Tick ticks = 5;
+  repeated Bar bars = 6;
+}
+
+message Tick {
+  uint64 ts_ms = 1;
+  sint32 price_scaled = 2;
+  uint32 source_id = 3;
+  // Monotonic per-symbol sequence (u64 — must not truncate).
+  uint64 seq = 4;
+}
+
+// GEX values are dollars of dealer hedging per $1 move in the underlying.
+// Each `*_shares` field is its dollar sibling in shares of the underlying
+// per $1 move, absent when unknown.
+message GexGridResponse {
+  optional uint64 captured_at_ms = 1;
+  optional double spot = 2;
+  optional double prior_close_spot = 3;
+  double net_gex = 4;
+  optional double net_gex_shares = 9;
+  optional double flip_point = 5;
+  double max_abs_gex = 6;
+  optional double max_abs_gex_shares = 10;
+  bool adhoc = 7;
+  repeated GexGridRow rows = 8;
+}
+
+message GexGridRow {
+  int64 strike_thousandths = 1;
+  double gex = 2;
+  optional double gex_shares = 8;
+  optional double gex_0dte = 3;
+  optional double gex_0dte_shares = 9;
+  optional int32 call_oi = 4;
+  optional int32 put_oi = 5;
+  optional double delta_adj = 6;
+  optional double delta_adj_shares = 10;
+  optional int32 expiry_epoch_day = 7;
+}
+
+message ChainResponse {
+  optional uint64 captured_at_ms = 1;
+  optional double spot = 2;
+  bool partial = 3;
+  repeated ChainRow rows = 4;
+}
+
+message ChainRow {
+  int32 expiry_epoch_day = 1;
+  uint32 right = 2; // 0 = call, 1 = put
+  int64 strike_thousandths = 3;
+  optional int64 oi = 4;
+  optional int64 volume = 5;
+  optional double bid = 6;
+  optional double ask = 7;
+  optional double last = 8;
+  optional double fmv = 9;
+  optional double iv = 10;
+  optional double delta = 11;
+  optional double gamma = 12;
+  optional double theta = 13;
+  optional double vega = 14;
+  uint32 shares_per_contract = 15;
+}
+
+// Synthetic aggregates derived from ITMatrixHQ's locally captured
+// off-exchange feed. These messages intentionally have no raw-print identity,
+// venue/TRF, condition, or vendor-source fields.
+message OffExchangeActivityResponse {
+  repeated OffExchangeActivityRow rows = 1;
+}
+
+message OffExchangeActivityRow {
+  string date = 1;
+  double off_exchange_volume = 2;
+  double notional = 3;
+  uint64 trade_count = 4;
+  double average_size = 5;
+  double vwap = 6;
+  optional double off_exchange_share = 7;
+  optional double consolidated_volume = 8;
+  optional double consolidated_notional = 9;
+}
+
+message OffExchangeConcentrationResponse {
+  repeated OffExchangeConcentrationRow rows = 1;
+}
+
+message OffExchangeConcentrationRow {
+  string date = 1;
+  double bucket_midpoint = 2;
+  double bucket_width = 3;
+  double volume = 4;
+  double notional = 5;
+  uint64 trade_count = 6;
+  uint32 distinct_sessions = 7;
+  double rank_score = 8;
+  uint32 rank = 9;
+  uint32 bucket_count = 10;
+  optional double distance_bps = 11;
+  uint32 lookback_sessions = 12;
+}
+
+message OffExchangeProfileResponse {
+  repeated OffExchangeProfileRow rows = 1;
+}
+
+message OffExchangeProfileRow {
+  string date = 1;
+  int64 price_thousandths = 2;
+  double volume = 3;
+  double notional = 4;
+  uint64 trade_count = 5;
+}
+
+message OffExchangeCompositionResponse {
+  repeated OffExchangeCompositionRow rows = 1;
+}
+
+message OffExchangeCompositionRow {
+  string date = 1;
+  string category = 2;
+  double volume = 3;
+  double notional = 4;
+  uint64 trade_count = 5;
+  double share_of_off_exchange_notional = 6;
+}

@@ -1,0 +1,60 @@
+{
+  "name": "@itmatrixhq/core",
+  "version": "1.0.0",
+  "description": "Typed TypeScript client for the ITMatrixHQ API",
+  "keywords": [
+    "itmatrixhq",
+    "itmatrix",
+    "options",
+    "gamma exposure",
+    "gex",
+    "market data",
+    "api client"
+  ],
+  "homepage": "https://itmatrixhq.com",
+  "bugs": {
+    "url": "https://github.com/ITMatrixHQ/itmatrix-sdks/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ITMatrixHQ/itmatrix-sdks.git",
+    "directory": "ts/packages/core"
+  },
+  "author": "ITMatrixHQ",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "gen": "bash ../../../scripts/gen-ts.sh",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "ts-proto": "^2.12.1",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.14.0"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

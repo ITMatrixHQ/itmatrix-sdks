@@ -1,0 +1,120 @@
+// itmatrixhq.ws.v1 — PUBLIC wire schema for external WS clients.
+//
+// One protobuf schema shared by every language SDK. Control frames remain JSON
+// (protocol v2 control plane); each WS binary message is exactly one Frame.
+//
+// Conventions:
+//   - prices are sint32 scaled by PRICE_SCALE = 10000 (4 decimal places);
+//   - timestamps are epoch milliseconds UTC;
+//   - option right: 0 = call, 1 = put; expiry: days since 1970-01-01;
+//   - strikes are integer thousandths of a dollar (the OSI unit).
+syntax = "proto3";
+
+package itmatrixhq.ws.v1;
+
+// One WS data frame. Protobuf sessions subscribe routed, so every frame
+// carries its symbol.
+message Frame {
+  string symbol = 1;
+  oneof payload {
+    Trade trade = 10;
+    Mid mid = 11;
+    BarOpen bar_open = 12;
+    BarClose bar_close = 13;
+    Quote quote = 14;
+    Spot spot = 15;
+    IndexValue index_value = 16;
+    GexSnap gex_snap = 17;
+    GexDelta gex_delta = 18;
+    ChainSnap chain_snap = 19;
+    ChainDelta chain_delta = 20;
+  }
+}
+
+message Trade {
+  uint64 ts_ms = 1;
+  sint32 price_scaled = 2;
+  uint32 size = 3;
+}
+
+message Mid {
+  uint64 ts_ms = 1;
+  sint32 mid_scaled = 2;
+}
+
+message BarOpen {
+  uint64 ts_ms = 1;
+  sint32 open_scaled = 2;
+}
+
+message BarClose {
+  uint64 ts_ms = 1;
+  sint32 open_scaled = 2;
+  sint32 high_scaled = 3;
+  sint32 low_scaled = 4;
+  sint32 close_scaled = 5;
+  uint32 volume = 6;
+}
+
+message Quote {
+  uint64 ts_ms = 1;
+  sint32 bid_scaled = 2;
+  uint32 bid_size = 3;
+  sint32 ask_scaled = 4;
+  uint32 ask_size = 5;
+}
+
+message Spot {
+  uint64 ts_ms = 1;
+  sint32 price_scaled = 2;
+}
+
+message IndexValue {
+  uint64 ts_ms = 1;
+  sint32 value_scaled = 2;
+}
+
+message GexSnap {
+  uint64 captured_at_ms = 1;
+  double spot = 2;
+  double net_gex = 3;
+  repeated GexStrike strikes = 4;
+}
+
+message GexStrike {
+  int64 strike_thousandths = 1;
+  double gex = 2;
+  optional int32 call_oi = 3;
+  optional int32 put_oi = 4;
+}
+
+message GexDelta {
+  uint64 captured_at_ms = 1;
+  repeated GexDeltaStrike strikes = 2;
+}
+
+message GexDeltaStrike {
+  int64 strike_thousandths = 1;
+  double gex = 2;
+}
+
+message ChainSnap {
+  uint64 captured_at_ms = 1;
+  double spot = 2;
+  repeated ChainRow rows = 3;
+}
+
+message ChainDelta {
+  uint64 captured_at_ms = 1;
+  repeated ChainRow rows = 2;
+}
+
+message ChainRow {
+  int32 expiry_epoch_day = 1;
+  uint32 right = 2; // 0 = call, 1 = put
+  int64 strike_thousandths = 3;
+  optional double bid = 4;
+  optional double ask = 5;
+  optional double iv = 6;
+  optional int32 oi = 7;
+}

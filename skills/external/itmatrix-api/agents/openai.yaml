@@ -1,0 +1,4 @@
+interface:
+  display_name: "ITMatrixHQ API"
+  short_description: "Use the ITMatrixHQ market-data API from Python, TypeScript or HTTPS"
+  default_prompt: "Use $itmatrix-api to build this market-data workflow on the ITMatrixHQ API."
