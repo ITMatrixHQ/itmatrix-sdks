@@ -6,6 +6,7 @@ import {
   ReplayResponse,
 } from "./_wire/rest.js";
 import { DEFAULT_BASE_URL } from "./config.js";
+import { CLIENT_NAME, CURRENT_HEADER, SDK_HEADER, isServerRuntime, noticeCurrent } from "./version.js";
 import { ITMError } from "./errors.js";
 import { analyzeGex, type GexAnalysis } from "./analytics.js";
 import { resolveBarWindow, validateBarWindow, type BarPeriod } from "./periods.js";
@@ -45,6 +46,14 @@ export interface ClientOptions<T extends Transport = "json"> {
   /** An application-owned codec for normalized market-data methods. */
   codec?: MarketDataCodec;
   stream?: Omit<StreamConfig, "url" | "ticket"> & { url?: string };
+  /**
+   * Send `X-ITM-SDK: itmatrix-typescript/<version>` on each request. Defaults
+   * to true on Node, Deno and Bun and false in browsers, where a custom header
+   * forces a CORS preflight the page's origin may not be allowed.
+   */
+  sdkHeader?: boolean;
+  /** Warn once when the API advertises a newer minor or major release (default true). */
+  upgradeNotice?: boolean;
 }
 
 export interface PeriodBarsOptions {
@@ -54,6 +63,8 @@ export interface PeriodBarsOptions {
   now?: Date;
   timeframe?: Bar["timeframe"];
   source?: "trade" | "mid";
+  /** Price axis: `"split"` (the default) or `"none"` (as traded). */
+  adj?: "split" | "none";
   limit?: number;
   cursor?: string;
   signal?: AbortSignal;
@@ -100,6 +111,8 @@ export class ITMClient<T extends Transport = "json"> {
   private readonly timeoutMs: number;
   private readonly codec?: MarketDataCodec;
   private readonly streamConfig: StreamConfig;
+  private readonly sdkHeader: boolean;
+  private readonly upgradeNotice: boolean;
   private streamInstance?: Stream;
   private closed = false;
 
@@ -166,6 +179,8 @@ export class ITMClient<T extends Transport = "json"> {
     this.credential = options.apiKey ?? options.token;
     this.fetcher = availableFetch;
     this.retries = options.retries ?? 2;
+    this.sdkHeader = options.sdkHeader ?? isServerRuntime();
+    this.upgradeNotice = options.upgradeNotice ?? true;
 
     const request = (<R>(
       path: string,
@@ -175,7 +190,7 @@ export class ITMClient<T extends Transport = "json"> {
     const offexchangeWire = (<Json, Proto>(path: string, query: Query,
       decoder: Decoder<Proto>, signal?: AbortSignal) =>
       this.wire<Json, Proto>(path, query, decoder, signal)) as import("./resources.js").ResourceWireRequester;
-    this.darkpool = new DarkpoolResource(offexchangeWire);
+    this.darkpool = new DarkpoolResource(offexchangeWire, request);
     this.offexchange = this.darkpool;
     this.economy = new EconomyResource(request);
     this.flow = new FlowResource(request);
@@ -190,6 +205,8 @@ export class ITMClient<T extends Transport = "json"> {
     this.watchlists = new WatchlistsResource(request);
 
     this.streamConfig = {
+      // An `itm_` key streams with protocol 8; any other credential keeps protocol 3.
+      keyAuth: async () => (await resolveCredential(this.credential))?.startsWith("itm_") === true,
       ...options.stream,
       url: options.stream?.url ?? websocketUrl(this.baseUrl),
       ticket: async () => (
@@ -260,7 +277,8 @@ export class ITMClient<T extends Transport = "json"> {
   getBars(symbol: string, options: BarsOptions): Promise<ApiResult<Bar[]>> {
     return this.marketData("bars", `/v2/stocks/${symbolPath(symbol)}/bars`, {
       from: options.from, to: options.to, timeframe: options.timeframe,
-      tz: options.tz, source: options.source, limit: options.limit, cursor: options.cursor,
+      tz: options.tz, source: options.source, adj: options.adj,
+      limit: options.limit, cursor: options.cursor,
     }, { symbol: normalizeSymbol(symbol), timeframe: options.timeframe }, options.signal);
   }
 
@@ -273,7 +291,7 @@ export class ITMClient<T extends Transport = "json"> {
     validateBarWindow(window, timeframe);
     return this.getBars(symbol, {
       from: window.from, to: window.to, tz: window.tz, timeframe,
-      source: options.source, limit: options.limit, cursor: options.cursor,
+      source: options.source, adj: options.adj, limit: options.limit, cursor: options.cursor,
       signal: options.signal,
     });
   }
@@ -320,7 +338,7 @@ export class ITMClient<T extends Transport = "json"> {
     Promise<ApiResult<WireData<T, Bar[], BarsResponse>>> {
     return this.wire(`/v2/stocks/${symbolPath(symbol)}/bars`, {
       from: options.from, to: options.to, timeframe: options.timeframe,
-      tz: options.tz, source: options.source, limit: options.limit,
+      tz: options.tz, source: options.source, adj: options.adj, limit: options.limit,
       cursor: options.cursor,
     }, BarsResponse.decode, options.signal);
   }
@@ -396,6 +414,7 @@ export class ITMClient<T extends Transport = "json"> {
       const credential = await resolveCredential(this.credential);
       if (credential) headers.set("Authorization", `Bearer ${credential}`);
       if (options.ifNoneMatch) headers.set("If-None-Match", options.ifNoneMatch);
+      if (this.sdkHeader) headers.set(SDK_HEADER, CLIENT_NAME);
       const body = requestBody(options);
       if (body !== undefined) {
         headers.set("Content-Type", options.contentType ?? "application/json");
@@ -412,6 +431,7 @@ export class ITMClient<T extends Transport = "json"> {
         continue;
       }
 
+      if (this.upgradeNotice) noticeCurrent(response.headers.get(CURRENT_HEADER));
       const requestId = response.headers.get("x-request-id") ?? undefined;
       const etag = response.headers.get("etag") ?? undefined;
       if (response.status === 304) {

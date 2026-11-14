@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
-# Opt-in read-only drift check against a configured backend.
+# Opt-in drift check against a configured backend. Read-only unless
+# ITM_API_KEY is also set (see the live smoke below).
 #
-# Two halves:
-#   1. the frozen protobuf wire schemas, byte-for-byte;
+# Three parts:
+#   1. the frozen protobuf wire schemas, byte-for-byte, and the served ws
+#      schema carries the v2 keyed GEX book messages (GexStrikeBook,
+#      GexStrikeBookUpdate) as Frame fields 23 and 24, which is what the SDK
+#      decodes at protocol 8;
 #   2. the OpenAPI surface the handwritten SDK models — every operation the SDK
 #      claims to support must exist, and every query param the SDK sends must be
 #      declared. A param the SDK sends that the backend no longer declares is
 #      the failure mode this half exists to catch: the request still returns
 #      200 while silently doing nothing, which is exactly how `sort` on the
-#      dark-pool scanner stayed broken.
+#      dark-pool scanner stayed broken. The stream ticket and connect operations
+#      must exist and must not be marked coming-soon;
+#   3. only when ITM_API_KEY is set, a live keyed GEX stream smoke (never run
+#      by default, never in CI without a key).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 base="${ITM_API_URL:?Set ITM_API_URL to the backend origin to verify}"
@@ -19,6 +26,16 @@ for wire in rest ws; do
   cmp "spec/proto/itmatrixhq/$wire/v1/wire.proto" "$artifacts/$wire.proto"
   echo "$wire protobuf schema matches backend byte-for-byte"
 done
+for message in GexStrikeBook GexStrikeBookUpdate; do
+  grep -Eq "^message $message \{" "$artifacts/ws.proto" \
+    || { echo "served ws protobuf schema has no $message message" >&2; exit 1; }
+done
+for field in "GexStrikeBook gex_strike_book = 23;" \
+  "GexStrikeBookUpdate gex_strike_book_update = 24;"; do
+  grep -Fq "$field" "$artifacts/ws.proto" \
+    || { echo "served ws Frame does not declare: $field" >&2; exit 1; }
+done
+echo "served ws protobuf schema carries GexStrikeBook (23) and GexStrikeBookUpdate (24)"
 
 curl --fail --silent --show-error --max-time 30 "${base%/}/v2/openapi.json" -o "$artifacts/openapi.json"
 # The served document is the source of the base URL once it declares servers.
@@ -39,9 +56,10 @@ EXPECTED = {
     "offexchange_getConcentration": ["from", "to", "tz", "limit", "cursor"],
     "offexchange_getProfile": ["from", "to", "tz", "limit", "cursor"],
     "offexchange_getComposition": ["from", "to", "tz", "limit", "cursor"],
-    "bars_getBars": ["from", "to", "timeframe", "tz", "limit", "cursor"],
+    "bars_getBars": ["from", "to", "timeframe", "tz", "adj", "limit", "cursor"],
     "gex_getGrid": ["at", "tz", "expiries", "dte", "top"],
-    "fundamentals_getDataset": ["timeframe", "limit"],
+    "fundamentals_getDataset": ["timeframe", "limit", "vintage", "as_of"],
+    "darkpool_getLevels": ["from", "to", "tz", "limit", "cursor"],
     "chain_getChain": ["at", "tz", "expiry", "strike_gte", "strike_lte"],
     "gex_getHistory": ["date", "from", "to", "by_expiry", "top"],
     "gex_getReference": ["date", "basis"],
@@ -59,7 +77,14 @@ EXPECTED = {
     "ops_getHealthz": [],
     "ops_getReadyz": [],
     "ops_getOpenapi": [],
+    # The keyed GEX stream: mint a ticket, then connect.
+    "stream_createTicket": [],
+    "stream_connectWs": [],
 }
+
+# Operations that must be live, not announced. A coming-soon stream means the
+# keyed stream the SDK connects to is not served yet.
+LIVE = ["stream_createTicket", "stream_connectWs"]
 
 # Params the contract REMOVED. Their reappearance is drift in the other
 # direction — the SDK stopped modelling them for a reason.
@@ -91,6 +116,11 @@ for op_id, banned in FORBIDDEN.items():
         if name in declared:
             failures.append(f"{op_id}: `{name}` was removed from the contract but is declared again")
 
+for op_id in LIVE:
+    availability = (ops.get(op_id) or {}).get("x-availability")
+    if availability == "coming-soon":
+        failures.append(f"{op_id}: marked x-availability coming-soon in the served spec")
+
 # Every operation the SDK advertises must exist. Scope the lightweight source
 # parser to SUPPORTED_OPERATIONS so the adjacent, deliberately absent legacy
 # inventory cannot be mistaken for callable surface.
@@ -114,3 +144,49 @@ if failures:
     raise SystemExit(1)
 print(f"OpenAPI surface matches the SDK models ({len(ops)} operations checked)")
 PY
+
+# Live keyed GEX stream smoke. Opt in by exporting ITM_API_KEY (an itm_ key on
+# an account that is on the stream preview list). Otherwise this part is skipped.
+# It mints a ticket, connects with the SDK in this tree, subscribes to SPY GEX,
+# needs a GexStrikeBook keyframe within 10 seconds (the SDK checks its CRC before it
+# yields) and then applies one more frame. Needs the Python package's
+# dependencies, for example: pip install -e "python[stream]".
+if [ -z "${ITM_API_KEY:-}" ]; then
+  echo "live stream smoke skipped: ITM_API_KEY is not set"
+  exit 0
+fi
+PYTHONPATH="python/src${PYTHONPATH:+:$PYTHONPATH}" python3 - "${base%/}" <<'PY'
+import asyncio
+import os
+import sys
+
+import itmatrix as itm
+
+
+async def main(base_url: str) -> None:
+    async with itm.AsyncITMClient(
+        api_key=os.environ["ITM_API_KEY"], base_url=base_url
+    ) as client:
+        async with client.stream.gex_book("SPY") as book:
+            keyframe = await asyncio.wait_for(book.__anext__(), 10)
+            assert keyframe.reason is not None, "first frame was not a keyframe"
+            assert len(keyframe.strikes) > 0, "keyframe has no strikes"
+            print(
+                f"keyframe ok: version {keyframe.version}, "
+                f"{len(keyframe.strikes)} strikes, reason {keyframe.reason}"
+            )
+            # Updates arrive about every 5 s while the market is open. The
+            # window allows a slow engine tick or a keyframe-sized change.
+            following = await asyncio.wait_for(book.__anext__(), 30)
+            kind = "update" if following.reason is None else "keyframe"
+            print(f"{kind} ok: version {following.version}, {len(following.changed)} changed")
+
+
+try:
+    asyncio.run(main(sys.argv[1]))
+except itm.StreamError as error:
+    raise SystemExit(f"live stream smoke failed: {error.code} {error.reason or ''}: {error.message}")
+except TimeoutError:
+    raise SystemExit("live stream smoke failed: no frame in time")
+PY
+echo "live stream smoke passed"

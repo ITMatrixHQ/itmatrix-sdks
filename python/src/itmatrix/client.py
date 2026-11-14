@@ -22,6 +22,7 @@ from anyio.from_thread import BlockingPortal
 from typing_extensions import Self, Unpack
 
 from ._core.client import ITMClient as _TransportClient
+from ._core.client import _credential
 from ._core.config import DEFAULT_BASE_URL
 from ._core.models import (
     Credential,
@@ -52,7 +53,19 @@ class AsyncITMClient(_TransportClient):
     when you are done. A client that owns its HTTP pool and is collected
     unclosed emits ``ResourceWarning``; async cleanup cannot run from a
     finalizer, so close it explicitly.
+
+    ``stream.gex_book(symbol)`` needs an ``itm_`` API key. Such a client connects
+    with the keyed stream protocol; any other credential keeps protocol 3.
     """
+
+    @wraps(_TransportClient.__init__)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.stream._key_auth = self._uses_api_key
+
+    async def _uses_api_key(self) -> bool:
+        credential = await _credential(self._credential)
+        return bool(credential) and credential.startswith("itm_")
 
     async def get_gex(
         self, symbol: str, **options: Unpack[GexOptions]
@@ -142,6 +155,7 @@ class AsyncITMClient(_TransportClient):
         now: datetime | None = None,
         timeframe: str | None = None,
         source: Literal["trade", "mid"] | None = None,
+        adj: Literal["split", "none"] | None = None,
         limit: int | None = None,
         cursor: str | None = None,
         timeout: float | None = None,
@@ -157,7 +171,7 @@ class AsyncITMClient(_TransportClient):
             "timeframe": selected,
         }
         for key, value in (
-            ("source", source), ("limit", limit), ("cursor", cursor),
+            ("source", source), ("adj", adj), ("limit", limit), ("cursor", cursor),
             ("timeout", timeout),
         ):
             if value is not None:
@@ -440,13 +454,14 @@ class ITMClient:
         now: datetime | None = None,
         timeframe: str | None = None,
         source: Literal["trade", "mid"] | None = None,
+        adj: Literal["split", "none"] | None = None,
         limit: int | None = None,
         cursor: str | None = None,
         timeout: float | None = None,
     ) -> Result[Bars]:
         return self._call(
             self._runtime.client.get_bars_for_period, symbol, period, month=month,
-            now=now, timeframe=timeframe, source=source, limit=limit,
+            now=now, timeframe=timeframe, source=source, adj=adj, limit=limit,
             cursor=cursor, timeout=timeout,
         )
 

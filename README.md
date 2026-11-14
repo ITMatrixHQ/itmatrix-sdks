@@ -51,6 +51,27 @@ console.log(grid.data.net_gex, grid.meta.caps);
 
 Python and TypeScript's friendly market-data methods normalize JSON and protobuf into stable domain models. Low-level wire APIs remain available for callers that need exact protobuf fields. Missing values remain missing; timestamps and strike units are documented. Every result retains metadata, status, request ID and ETag. Entitlements are enforced by the server; methods for app-only data do not give an API key access to it.
 
+## Streaming GEX with an API key
+
+API Explorer and API Pro keys can stream live GEX over WebSocket with SDK 1.1.0 or later (`pip install -U "itmatrix[stream]"`, `npm i @itmatrixhq/core@latest`). The book updates about every 5 seconds today. The stream uses protobuf frames, a keyframe plus update model and the `itmatrixhq.v1` subprotocol, all of which the SDK handles. Explorer allows 5 connections and 25 subscriptions. Pro allows 100 connections and 1,000 subscriptions. Each connection holds up to 50.
+
+```python
+async with itm.AsyncITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
+    async with client.stream.gex_book("SPY", filter=filters.nearest(20)) as book:
+        async for state in book:
+            print(state.net_gex, state.flip_point, state.strikes, state.gex)
+```
+
+```ts
+for await (const state of client.stream.gexBook("SPY", { filter: nearest(20) })) {
+  console.log(state.netGex, state.flipPoint, state.strikes, state.gex);
+}
+```
+
+Each strike carries call and put GEX, and `gex` is their sum. The filter picks among the book's 120 strikes, which are ranked by gross GEX, so `nearest(20)` can have gaps.
+
+The stream requires the ITMatrixHQ SDK protocol. The server cannot prove that the SDK was used, and the requirement is not a security control. See [streaming](docs/streaming.md) for the protocol, limits, reconnect rules and close reasons.
+
 One shared stream owns tickets, subscriptions, ping/pong and reconnection. It mints a new ticket when establishing a connection and never replaces a healthy socket just because its handshake ticket expired.
 
 ## Contributing and packaging

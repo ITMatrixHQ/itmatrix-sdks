@@ -1,0 +1,320 @@
+{
+  "about": "Golden vectors for the keyed GEX book v2 (itmatrixhq.ws.v1 GexStrikeBook = Frame field 23, GexStrikeBookUpdate = Frame field 24). Apply the steps in order to one client state. Each frame_hex is one complete Frame as one WebSocket binary message. 'state' is the client state after the step; for expect=resync the frame must be rejected (CRC of the book after applying is crc_after_applying, the frame carries a different crc), the state stays as it was, and the client sends {op:\"resync\"}. The backend asserts its own encoder reproduces every apply step byte for byte (crates/itm-api/src/stream/keyed_gex.rs, crates/itm-wire-proto/tests/gex_book_vectors.rs). SDKs copy this file verbatim.",
+  "conventions": {
+    "strikes": "integer thousandths of a dollar; the frame carries [0] absolute and [i>0] the delta to the previous strike (sint64)",
+    "call_gex_put_gex": "float32 per-$1-move dollars, calls >= 0, puts <= 0; every value here is exactly representable",
+    "gex": "derived, not sent: float64(call) + float64(put)",
+    "book_id": "fixed64, given as a decimal string because it exceeds 2^53",
+    "flip_point": "null when the frame does not carry it",
+    "crc": "CRC-32/IEEE (zlib.crc32) over the strikes in ascending order, each as strike thousandths int64 LE, then call float32 bits LE, then put float32 bits LE",
+    "update_rule": "an update applies only to the same book_id at version = state.version + 1, and only when the CRC of the book after applying equals the frame's crc",
+    "engine": "update steps also give the engine grid the server diffed (relative deadband 1e-3 of the published book's largest max(|call|,|put|), both sides sent for each listed index)"
+  },
+  "symbol": "SPY",
+  "steps": [
+    {
+      "name": "keyframe",
+      "frame_hex": "0a03535059ba016d0880d4a7faa3331188776655443322111807210000000000ca824029000000c00b5ad6c1310000000000b482403a0bf0d048904e88278827904e421420bc3e4b286b6e4d5ed0324d286b6e4c286bee4b4a14286beecc5ed0b2cc5ed032cc286b6ecb0000000055a821af175801",
+      "frame": {
+        "symbol": "SPY",
+        "gex_strike_book": {
+          "captured_at_ms": 1761998400000,
+          "book_id": "1234605616436508552",
+          "version": 7,
+          "spot": 601.25,
+          "net_gex": -1500000000.0,
+          "flip_point": 598.5,
+          "strikes_delta": [
+            595000,
+            5000,
+            2500,
+            2500,
+            5000
+          ],
+          "call_gex": [
+            12500000.0,
+            250000000.0,
+            187500000.0,
+            62500000.0,
+            31250000.0
+          ],
+          "put_gex": [
+            -125000000.0,
+            -93750000.0,
+            -46875000.0,
+            -15625000.0,
+            0.0
+          ],
+          "crc": 397353384,
+          "reason": 1
+        }
+      },
+      "expect": "apply",
+      "state": {
+        "book_id": "1234605616436508552",
+        "version": 7,
+        "captured_at_ms": 1761998400000,
+        "spot": 601.25,
+        "net_gex": -1500000000.0,
+        "flip_point": 598.5,
+        "strikes": [
+          595000,
+          600000,
+          602500,
+          605000,
+          610000
+        ],
+        "call_gex": [
+          12500000.0,
+          250000000.0,
+          187500000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -125000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15625000.0,
+          0.0
+        ],
+        "gex": [
+          -112500000.0,
+          156250000.0,
+          140625000.0,
+          46875000.0,
+          31250000.0
+        ],
+        "crc": 397353384
+      }
+    },
+    {
+      "name": "update_1",
+      "frame_hex": "0a03535059c2014a0888fba7faa3331188776655443322111808210000000000cc8240290000008093dcd4c1310000000000b882403a0201044208667f624d286bee4b4a085ed0b2cc20bc3eca5554bfe626",
+      "frame": {
+        "symbol": "SPY",
+        "gex_strike_book_update": {
+          "captured_at_ms": 1761998405000,
+          "spot": 601.5,
+          "net_gex": -1400000000.0,
+          "flip_point": 599.0,
+          "book_id": "1234605616436508552",
+          "version": 8,
+          "index": [
+            1,
+            4
+          ],
+          "call_gex": [
+            237500000.0,
+            31250000.0
+          ],
+          "put_gex": [
+            -93750000.0,
+            -3125000.0
+          ],
+          "crc": 652656468
+        }
+      },
+      "expect": "apply",
+      "state": {
+        "book_id": "1234605616436508552",
+        "version": 8,
+        "captured_at_ms": 1761998405000,
+        "spot": 601.5,
+        "net_gex": -1400000000.0,
+        "flip_point": 599.0,
+        "strikes": [
+          595000,
+          600000,
+          602500,
+          605000,
+          610000
+        ],
+        "call_gex": [
+          12500000.0,
+          237500000.0,
+          187500000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -125000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15625000.0,
+          -3125000.0
+        ],
+        "gex": [
+          -112500000.0,
+          143750000.0,
+          140625000.0,
+          46875000.0,
+          28125000.0
+        ],
+        "crc": 652656468
+      },
+      "engine": {
+        "call_gex": [
+          12500000.0,
+          237500000.0,
+          187500000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -125000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15500000.0,
+          -3125000.0
+        ]
+      }
+    },
+    {
+      "name": "update_2",
+      "frame_hex": "0a03535059c201410890a2a8faa3331188776655443322111809210000000000ce824029000000a04f9bd5c13a0200024208c042404b670d334d4a08b08305cd5ed032cc55f31fbc03",
+      "frame": {
+        "symbol": "SPY",
+        "gex_strike_book_update": {
+          "captured_at_ms": 1761998410000,
+          "spot": 601.75,
+          "net_gex": -1450000000.0,
+          "flip_point": null,
+          "book_id": "1234605616436508552",
+          "version": 9,
+          "index": [
+            0,
+            2
+          ],
+          "call_gex": [
+            12600000.0,
+            187750000.0
+          ],
+          "put_gex": [
+            -140000000.0,
+            -46875000.0
+          ],
+          "crc": 62660595
+        }
+      },
+      "expect": "apply",
+      "state": {
+        "book_id": "1234605616436508552",
+        "version": 9,
+        "captured_at_ms": 1761998410000,
+        "spot": 601.75,
+        "net_gex": -1450000000.0,
+        "flip_point": null,
+        "strikes": [
+          595000,
+          600000,
+          602500,
+          605000,
+          610000
+        ],
+        "call_gex": [
+          12600000.0,
+          237500000.0,
+          187750000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -140000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15625000.0,
+          -3125000.0
+        ],
+        "gex": [
+          -127400000.0,
+          143750000.0,
+          140875000.0,
+          46875000.0,
+          28125000.0
+        ],
+        "crc": 62660595
+      },
+      "engine": {
+        "call_gex": [
+          12600000.0,
+          237500000.0,
+          187750000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -140000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15500000.0,
+          -3125000.0
+        ]
+      }
+    },
+    {
+      "name": "update_crc_mismatch",
+      "frame_hex": "0a03535059c201410898c9a8faa333118877665544332211180a210000000000d0824029000000a04f9bd5c1310000000000ba82403a010342040024744c4a04e0826ccb55f538918b",
+      "frame": {
+        "symbol": "SPY",
+        "gex_strike_book_update": {
+          "captured_at_ms": 1761998415000,
+          "book_id": "1234605616436508552",
+          "version": 10,
+          "spot": 602.0,
+          "net_gex": -1450000000.0,
+          "flip_point": 599.25,
+          "index": [
+            3
+          ],
+          "call_gex": [
+            64000000.0
+          ],
+          "put_gex": [
+            -15500000.0
+          ],
+          "crc": 2341550325
+        }
+      },
+      "expect": "resync",
+      "crc_after_applying": 2341550324,
+      "state": {
+        "book_id": "1234605616436508552",
+        "version": 9,
+        "captured_at_ms": 1761998410000,
+        "spot": 601.75,
+        "net_gex": -1450000000.0,
+        "flip_point": null,
+        "strikes": [
+          595000,
+          600000,
+          602500,
+          605000,
+          610000
+        ],
+        "call_gex": [
+          12600000.0,
+          237500000.0,
+          187750000.0,
+          62500000.0,
+          31250000.0
+        ],
+        "put_gex": [
+          -140000000.0,
+          -93750000.0,
+          -46875000.0,
+          -15625000.0,
+          -3125000.0
+        ],
+        "gex": [
+          -127400000.0,
+          143750000.0,
+          140875000.0,
+          46875000.0,
+          28125000.0
+        ],
+        "crc": 62660595
+      }
+    }
+  ]
+}

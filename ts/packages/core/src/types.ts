@@ -109,6 +109,8 @@ export interface BarsOptions extends Cancellable {
   to: string | number | Date;
   timeframe?: Bar["timeframe"];
   source?: "trade" | "mid";
+  /** Price axis: `"split"` (the default; every bar rescaled to today's share count) or `"none"` (as traded). */
+  adj?: "split" | "none";
   tz?: string;
   limit?: number;
   cursor?: string;
@@ -221,6 +223,24 @@ export interface OffExchangeProfileRow {
   notional: number;
   trade_count: number;
 }
+
+/**
+ * One session's off-exchange volume at one price level, from
+ * `GET /v2/darkpool/{symbol}/levels`. `price_thousandths` is the exact level
+ * (`766295` = $766.295); volume is shares, notional dollars, and there is no
+ * buy or sell side.
+ */
+export interface DarkPoolLevelRow {
+  ticker: string;
+  date: string;
+  price_thousandths: number;
+  volume: number;
+  notional: number;
+  trade_count: number;
+}
+
+/** Range and page for dark-pool levels; without `from`/`to`, the latest session. */
+export type DarkPoolLevelsOptions = OffExchangeOptions;
 
 export interface OffExchangeCompositionRow {
   date: string;
@@ -442,6 +462,18 @@ export interface FundamentalsOptions extends Cancellable {
   timeframe?: "quarterly" | "annual" | "trailing_twelve_months";
   /** Rows, newest first, 1..=50 (backend default 8). */
   limit?: number;
+  /**
+   * `income` and `balance-sheet` only. `"latest"` (the default) is the newest,
+   * restated values; `"as_reported"` is what had been observed at `asOf`, the
+   * only view a backtest or screen should use.
+   */
+  vintage?: "latest" | "as_reported";
+  /**
+   * With `vintage: "as_reported"`: the instant to read the history at, an
+   * RFC 3339 timestamp or a `YYYY-MM-DD` date (the end of that UTC day).
+   * Refused before any request without `vintage: "as_reported"`.
+   */
+  asOf?: string | Date;
   /** Conditional read; a 304 comes back as `NotModified`. */
   ifNoneMatch?: string;
 }

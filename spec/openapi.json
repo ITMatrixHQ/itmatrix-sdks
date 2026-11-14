@@ -114,6 +114,30 @@
         ],
         "type": "object"
       },
+      "BarsCoverage": {
+        "properties": {
+          "from_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/MarketGap"
+            },
+            "type": "array"
+          },
+          "to_ms": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_ms",
+          "to_ms",
+          "gaps"
+        ],
+        "type": "object"
+      },
       "BreadthRow": {
         "description": "Market-wide off-exchange breadth for one session, with the universe it counted.",
         "properties": {
@@ -248,7 +272,7 @@
             ]
           },
           "flow": {
-            "description": "Whether this account has options flow in the ITMatrixHQ apps: Pro plus a non-professional declaration. Reported by the account operations.",
+            "description": "Whether this account has options flow in the ITMatrixHQ apps: Basic or Pro plus a market-data declaration, except on a professional trial. Reported by the account operations.",
             "type": [
               "boolean",
               "null"
@@ -645,6 +669,49 @@
           "ts_ms",
           "mark",
           "mark_source"
+        ],
+        "type": "object"
+      },
+      "DarkPoolLevelRow": {
+        "description": "One row of the `levels` dataset: a session's off-exchange volume at one price level.",
+        "properties": {
+          "date": {
+            "description": "The session.",
+            "type": "string"
+          },
+          "notional": {
+            "description": "Off-exchange notional at this level.",
+            "format": "double",
+            "type": "number"
+          },
+          "price_thousandths": {
+            "description": "The price level in thousandths of a dollar (`766295` = $766.295).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "ticker": {
+            "description": "The stock symbol.",
+            "type": "string"
+          },
+          "trade_count": {
+            "description": "Off-exchange executions at this level.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "volume": {
+            "description": "Off-exchange shares at this level.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "date",
+          "price_thousandths",
+          "volume",
+          "notional",
+          "trade_count"
         ],
         "type": "object"
       },
@@ -1282,6 +1349,228 @@
         ],
         "type": "object"
       },
+      "Envelope_MarketBars": {
+        "description": "A successful response: `data`, plus `meta` about the response.",
+        "properties": {
+          "data": {
+            "properties": {
+              "bars": {
+                "items": {
+                  "$ref": "#/components/schemas/MarketBar"
+                },
+                "type": "array"
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/BarsCoverage"
+              },
+              "instrument_id": {
+                "type": "string"
+              },
+              "interval": {
+                "type": "string"
+              },
+              "series_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "instrument_id",
+              "series_id",
+              "interval",
+              "bars",
+              "coverage"
+            ],
+            "type": "object"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "Envelope_MarketCatalog": {
+        "description": "A successful response: `data`, plus `meta` about the response.",
+        "properties": {
+          "data": {
+            "properties": {
+              "as_of_ms": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "instruments": {
+                "items": {
+                  "$ref": "#/components/schemas/MarketInstrument"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "total": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "instruments",
+              "as_of_ms",
+              "total"
+            ],
+            "type": "object"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "Envelope_MarketInstrument": {
+        "description": "A successful response: `data`, plus `meta` about the response.",
+        "properties": {
+          "data": {
+            "properties": {
+              "base_unit": {
+                "type": "string"
+              },
+              "capabilities": {
+                "$ref": "#/components/schemas/MarketCapabilities"
+              },
+              "collateral_unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "dex_display": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "display_symbol": {
+                "type": "string"
+              },
+              "history": {
+                "$ref": "#/components/schemas/MarketHistoryCoverage"
+              },
+              "instrument_id": {
+                "type": "string"
+              },
+              "market_family": {
+                "type": "string"
+              },
+              "price_decimals": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "quantity_decimals": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "quote_unit": {
+                "type": "string"
+              },
+              "session_policy": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "venue_display": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "instrument_id",
+              "display_symbol",
+              "display_name",
+              "venue_display",
+              "market_family",
+              "base_unit",
+              "quote_unit",
+              "price_decimals",
+              "quantity_decimals",
+              "session_policy",
+              "status",
+              "capabilities",
+              "history"
+            ],
+            "type": "object"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "Envelope_MarketQuote": {
+        "description": "A successful response: `data`, plus `meta` about the response.",
+        "properties": {
+          "data": {
+            "properties": {
+              "change_24h_percent": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event_time_ms": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "instrument_id": {
+                "type": "string"
+              },
+              "observed_at_ms": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "price": {
+                "type": "string"
+              },
+              "price_basis": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "instrument_id",
+              "price",
+              "price_basis",
+              "event_time_ms",
+              "observed_at_ms"
+            ],
+            "type": "object"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
       "Envelope_OptionBarsData": {
         "description": "A successful response: `data`, plus `meta` about the response.",
         "properties": {
@@ -1460,7 +1749,7 @@
             "description": "The latest price of one symbol.",
             "properties": {
               "price": {
-                "description": "Latest price, or `null` when there is no recent bar.",
+                "description": "Latest price, or `null` when there is no recent bar. With an API key, the latest price from the ITMatrixHQ price engine, or `null` when it has none for the symbol.",
                 "format": "double",
                 "type": [
                   "number",
@@ -1471,7 +1760,7 @@
                 "type": "string"
               },
               "ts": {
-                "description": "Start of the bar `price` came from.",
+                "description": "Start of the bar `price` came from. With an API key, the time of the price itself.",
                 "format": "int64",
                 "type": [
                   "integer",
@@ -1516,7 +1805,7 @@
                 "type": "string"
               },
               "requires_attestation": {
-                "description": "Whether reading it needs a non-professional declaration.",
+                "description": "Whether reading it needs a market-data declaration.",
                 "type": "boolean"
               },
               "symbol": {
@@ -1900,6 +2189,65 @@
                 "symbols_excluded_price",
                 "symbols_excluded_history",
                 "symbols_with_share"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "Envelope_Vec_DarkPoolLevelRow": {
+        "description": "A successful response: `data`, plus `meta` about the response.",
+        "properties": {
+          "data": {
+            "items": {
+              "description": "One row of the `levels` dataset: a session's off-exchange volume at one price level.",
+              "properties": {
+                "date": {
+                  "description": "The session.",
+                  "type": "string"
+                },
+                "notional": {
+                  "description": "Off-exchange notional at this level.",
+                  "format": "double",
+                  "type": "number"
+                },
+                "price_thousandths": {
+                  "description": "The price level in thousandths of a dollar (`766295` = $766.295).",
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "ticker": {
+                  "description": "The stock symbol.",
+                  "type": "string"
+                },
+                "trade_count": {
+                  "description": "Off-exchange executions at this level.",
+                  "format": "int64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "volume": {
+                  "description": "Off-exchange shares at this level.",
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "ticker",
+                "date",
+                "price_thousandths",
+                "volume",
+                "notional",
+                "trade_count"
               ],
               "type": "object"
             },
@@ -2661,7 +3009,7 @@
                   "type": "string"
                 },
                 "requires_attestation": {
-                  "description": "Whether reading it needs a non-professional declaration.",
+                  "description": "Whether reading it needs a market-data declaration.",
                   "type": "boolean"
                 },
                 "symbol": {
@@ -3921,6 +4269,358 @@
         ],
         "type": "object"
       },
+      "LegalStatus": {
+        "description": "The caller's acceptance status across the four documents.",
+        "properties": {
+          "all_current": {
+            "description": "`true` when every document is current.",
+            "type": "boolean"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/LegalDocumentStatus"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "documents",
+          "all_current"
+        ],
+        "type": "object"
+      },
+      "MarketBar": {
+        "properties": {
+          "base_quantity": {
+            "type": "string"
+          },
+          "close": {
+            "type": "string"
+          },
+          "close_time_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "high": {
+            "type": "string"
+          },
+          "instrument_id": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "string"
+          },
+          "low": {
+            "type": "string"
+          },
+          "open": {
+            "type": "string"
+          },
+          "open_time_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "quote_quantity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": "string"
+          },
+          "series_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "trade_count": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weighted_price_sum": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weighted_sum_method": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "series_id",
+          "interval",
+          "open_time_ms",
+          "close_time_ms",
+          "open",
+          "high",
+          "low",
+          "close",
+          "base_quantity",
+          "weighted_sum_method",
+          "state",
+          "revision",
+          "quality"
+        ],
+        "type": "object"
+      },
+      "MarketBars": {
+        "properties": {
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/MarketBar"
+            },
+            "type": "array"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BarsCoverage"
+          },
+          "instrument_id": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "string"
+          },
+          "series_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "series_id",
+          "interval",
+          "bars",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "MarketCapabilities": {
+        "properties": {
+          "bars": {
+            "type": "boolean"
+          },
+          "intervals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "quote": {
+            "type": "boolean"
+          },
+          "weighted_average": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bars",
+          "quote",
+          "live",
+          "intervals",
+          "weighted_average"
+        ],
+        "type": "object"
+      },
+      "MarketCatalog": {
+        "properties": {
+          "as_of_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/MarketInstrument"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instruments",
+          "as_of_ms",
+          "total"
+        ],
+        "type": "object"
+      },
+      "MarketGap": {
+        "properties": {
+          "from_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "to_ms": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_ms",
+          "to_ms",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "MarketHistoryCoverage": {
+        "properties": {
+          "from_ms": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/MarketGap"
+            },
+            "type": "array"
+          },
+          "to_ms": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "gaps"
+        ],
+        "type": "object"
+      },
+      "MarketInstrument": {
+        "properties": {
+          "base_unit": {
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/MarketCapabilities"
+          },
+          "collateral_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dex_display": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "display_symbol": {
+            "type": "string"
+          },
+          "history": {
+            "$ref": "#/components/schemas/MarketHistoryCoverage"
+          },
+          "instrument_id": {
+            "type": "string"
+          },
+          "market_family": {
+            "type": "string"
+          },
+          "price_decimals": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quantity_decimals": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quote_unit": {
+            "type": "string"
+          },
+          "session_policy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "venue_display": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "display_symbol",
+          "display_name",
+          "venue_display",
+          "market_family",
+          "base_unit",
+          "quote_unit",
+          "price_decimals",
+          "quantity_decimals",
+          "session_policy",
+          "status",
+          "capabilities",
+          "history"
+        ],
+        "type": "object"
+      },
+      "MarketQuote": {
+        "properties": {
+          "change_24h_percent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_time_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "type": "string"
+          },
+          "observed_at_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "price": {
+            "type": "string"
+          },
+          "price_basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "price",
+          "price_basis",
+          "event_time_ms",
+          "observed_at_ms"
+        ],
+        "type": "object"
+      },
       "Meta": {
         "allOf": [
           {
@@ -4371,7 +5071,15 @@
         "type": "string"
       },
       "Plane": {
-        "description": "Which serving tier answered the read (`meta.plane`). Informational provenance: treat it as an opaque label, because new values may appear.",
+        "description": "Which serving tier answered a read — `meta.plane` provenance.",
+        "enum": [
+          "memory",
+          "hot",
+          "lake",
+          "mixed",
+          "vendor",
+          "cache"
+        ],
         "type": "string"
       },
       "PremiumBucket": {
@@ -4594,7 +5302,7 @@
         "description": "Your current rate limit.",
         "properties": {
           "per_min": {
-            "description": "Requests per minute allowed on your plan.",
+            "description": "Requests per minute allowed on your plan, shared by all of your API keys.",
             "format": "int32",
             "minimum": 0,
             "type": "integer"
@@ -4796,7 +5504,7 @@
         "description": "The latest price of one symbol.",
         "properties": {
           "price": {
-            "description": "Latest price, or `null` when there is no recent bar.",
+            "description": "Latest price, or `null` when there is no recent bar. With an API key, the latest price from the ITMatrixHQ price engine, or `null` when it has none for the symbol.",
             "format": "double",
             "type": [
               "number",
@@ -4807,7 +5515,7 @@
             "type": "string"
           },
           "ts": {
-            "description": "Start of the bar `price` came from.",
+            "description": "Start of the bar `price` came from. With an API key, the time of the price itself.",
             "format": "int64",
             "type": [
               "integer",
@@ -4860,7 +5568,7 @@
             "type": "string"
           },
           "requires_attestation": {
-            "description": "Whether reading it needs a non-professional declaration.",
+            "description": "Whether reading it needs a market-data declaration.",
             "type": "boolean"
           },
           "symbol": {
@@ -5280,13 +5988,13 @@
     }
   },
   "info": {
-    "description": "Preview: the schema and base URL may change until Sunday, September 27, 2026, when the API moves to its permanent base URL and the official SDKs are released.\n\nThe ITMatrixHQ market analytics API. Every `/v2` response is a `{data, meta}` envelope; errors carry one code from a closed set; `meta.plane` reports provenance and `meta.caps` any entitlement limit that was applied.\n\nAuthenticate with `Authorization: Bearer itm_<key>`. The ITMatrixHQ apps send a first-party session token on the same header. An API key is refused with `403 not_entitled_tier` unless its account includes API access (web Pro includes API Explorer; the API plan includes API Pro), and with `403 attestation_required` unless the account has declared non-professional market-data use. Index symbols (SPX, NDX, VIX and others) and options on them are refused to API keys with `403 not_entitled_symbol`: index data is available in the ITMatrixHQ apps only.\n\nTags are scope groups, operationIds are `<scopeGroup>_<verbNoun>`, and `x-exposure` marks each operation `public`, `app-only` or `internal`. API keys may call `public` operations only.",
+    "description": "The ITMatrixHQ market analytics API. Every `/v2` response is a `{data, meta}` envelope; errors carry one code from a closed set; `meta.plane` reports provenance and `meta.caps` any entitlement limit that was applied.\n\nAuthenticate with `Authorization: Bearer itm_<key>`. The ITMatrixHQ apps send a first-party session token on the same header. An API key is refused with `403 not_entitled_tier` unless its account includes API access (web Pro includes API Explorer; the API plan includes API Pro), and with `403 attestation_required` unless the account has recorded a market-data classification. Index symbols (SPX, NDX, VIX and others) and options on them are refused to API keys with `403 not_entitled_symbol`: index data is available in the ITMatrixHQ apps only.\n\nRequests with an API key are rate limited per account: all of an account's keys share one per-minute budget, set by its plan. Every keyed response carries `x-ratelimit-limit` (requests per minute), `x-ratelimit-remaining` and `x-ratelimit-reset` (Unix seconds at which the budget is full again). A request over the limit may be refused with `429 rate_limited` and a `Retry-After` header. `GET /v2/account/usage` reports the account's limit.\n\nTags are scope groups, operationIds are `<scopeGroup>_<verbNoun>`, and `x-exposure` marks each operation `public`, `app-only` or `internal`. API keys may call `public` operations only.",
     "license": {
       "identifier": "proprietary",
       "name": "proprietary"
     },
     "title": "ITMatrixHQ API",
-    "version": "0.9.0"
+    "version": "2.20.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5363,7 +6071,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` / `attestation_required`"
+            "description": "`not_entitled_tier` / `attestation_required` / `not_entitled_symbol` — your plan cannot read this symbol"
           },
           "502": {
             "content": {
@@ -5392,6 +6100,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "analytics.gex",
         "x-sunset": "2026-12-31",
         "x-symbol-scoped": true
@@ -5504,7 +6213,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` / `attestation_required`"
+            "description": "`not_entitled_tier` / `attestation_required` / `not_entitled_symbol` — your plan cannot read this symbol"
           },
           "502": {
             "content": {
@@ -5533,6 +6242,7 @@
         ],
         "x-exposure": "app-only",
         "x-min-tier": "free",
+        "x-plane": "mixed",
         "x-scope-group": "market.live",
         "x-symbol-scoped": true
       }
@@ -5662,7 +6372,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` / `attestation_required`"
+            "description": "`not_entitled_tier` / `attestation_required` / `not_entitled_symbol` — your plan cannot read this symbol"
           },
           "502": {
             "content": {
@@ -5691,6 +6401,7 @@
         ],
         "x-exposure": "app-only",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-scope-group": "market.bars",
         "x-symbol-scoped": true
       }
@@ -5740,7 +6451,7 @@
         "x-scope-group": "account"
       },
       "post": {
-        "description": "Records whether you use market data as a professional or non-professional subscriber, and returns the stored record.\n\nThe body is `{\"classification\": \"non_professional\"}` or `{\"classification\": \"professional\"}`. A `non_professional` declaration unlocks the data that requires it from your next request. A `professional` declaration unlocks nothing and is final: a later `non_professional` submit returns the existing record with `locked: true`.\n\n#### Example\n\n```http\nPOST /v2/account/classification\n```\n\n```json\n{\n  \"data\": {\n    \"attested\": true,\n    \"submitted_at\": 1789185753185,\n    \"classification\": \"non_professional\",\n    \"locked\": false\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"flow\": true,\n      \"applied\": []\n    }\n  }\n}\n```",
+        "description": "Records whether you use market data as a professional or non-professional subscriber, and returns the stored record.\n\nThe body is `{\"classification\": \"non_professional\"}` or `{\"classification\": \"professional\"}`. Either declaration unlocks the app data from your next request (not exchange data on a professional trial, and API keys still need `non_professional` for the data that requires it), and a `professional` declaration is final: a later `non_professional` submit returns the existing record with `locked: true`. The declaration is made in the ITMatrixHQ web app, so an API key can read the classification but every API key gets `403 not_entitled_tier` here.\n\n#### Example\n\n```http\nPOST /v2/account/classification\n```\n\n```json\n{\n  \"data\": {\n    \"attested\": true,\n    \"submitted_at\": 1789185753185,\n    \"classification\": \"non_professional\",\n    \"locked\": false\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"flow\": true,\n      \"applied\": []\n    }\n  }\n}\n```",
         "operationId": "account_submitClassification",
         "requestBody": {
           "content": {
@@ -5783,6 +6494,16 @@
               }
             },
             "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot submit the classification; use the web app"
           },
           "503": {
             "content": {
@@ -5839,7 +6560,7 @@
         "x-scope-group": "account"
       },
       "post": {
-        "description": "Creates an API key and returns its secret in `key`, the only time the secret is shown.\n\nThe optional body is `{\"name\": \"ci\"}`. You need a plan with API access, or get `403 not_entitled_tier`, and a non-professional declaration, or get `403 attestation_required`. In-app only: requests with an API key are refused.",
+        "description": "Creates an API key and returns its secret in `key`, the only time the secret is shown.\n\nThe optional body is `{\"name\": \"ci\"}`. You need a plan with API access, or get `403 not_entitled_tier`, and a market-data classification, or get `403 attestation_required`. In-app only: requests with an API key are refused.",
         "operationId": "account_createKey",
         "responses": {
           "200": {
@@ -5870,7 +6591,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — the plan has no API access, which web Pro and the API plan include. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — the plan has no API access, which web Pro and the API plan include. `attestation_required` — record a market-data classification first."
           }
         },
         "summary": "Create API key",
@@ -5940,7 +6661,7 @@
     },
     "/v2/account/usage": {
       "get": {
-        "description": "Your request counts per day over the last 30 days, by scope group, with totals and your current rate limit.\n\nScope groups are this document's tags, such as `analytics.gex`. `rate_limit.per_min` matches the `x-ratelimit-limit` header, and `quota` is not reported yet.\n\n#### Units\n\n`date` is a UTC calendar day.\n\n#### Freshness\n\nCounts are provisional, not billing figures, and may miss some requests.\n\n#### Empty results\n\nBefore your first request, `by_day` is empty and `totals_by_scope_group` is `{}`.\n\n#### Example\n\nOne day and scope group:\n\n```http\nGET /v2/account/usage\n```\n\n```json\n{\n  \"data\": {\n    \"trailing_days\": 30,\n    \"by_day\": [\n      {\n        \"date\": \"2026-09-27\",\n        \"scope_group\": \"analytics.gex\",\n        \"count\": 4\n      }\n    ],\n    \"totals_by_scope_group\": {\n      \"analytics.gex\": 4\n    },\n    \"rate_limit\": {\n      \"per_min\": 600\n    }\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    }\n  }\n}\n```",
+        "description": "Your request counts per day over the last 30 days, by scope group, with totals and your current rate limit.\n\nScope groups are this document's tags, such as `analytics.gex`. `rate_limit.per_min` matches the `x-ratelimit-limit` header, and `quota` is not reported yet.\n\n#### Units\n\n`date` is a UTC calendar day.\n\n#### Freshness\n\nCounts are provisional, not billing figures, and may miss some requests.\n\n#### Empty results\n\nBefore your first request, `by_day` is empty and `totals_by_scope_group` is `{}`.\n\n#### Example\n\nOne day and scope group:\n\n```http\nGET /v2/account/usage\n```\n\n```json\n{\n  \"data\": {\n    \"trailing_days\": 30,\n    \"by_day\": [\n      {\n        \"date\": \"2026-09-27\",\n        \"scope_group\": \"analytics.gex\",\n        \"count\": 4\n      }\n    ],\n    \"totals_by_scope_group\": {\n      \"analytics.gex\": 4\n    },\n    \"rate_limit\": {\n      \"per_min\": 60\n    }\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    }\n  }\n}\n```",
         "operationId": "account_getUsage",
         "responses": {
           "200": {
@@ -5975,7 +6696,7 @@
     },
     "/v2/chain/{symbol}": {
       "get": {
-        "description": "Every listed contract of one underlying from a single capture, with quotes, open interest, implied volatility and greeks.\n\nRead it live, or as of a past time with `at`. Every row is valued against the capture's one `spot`, and `partial: true` marks a capture known to be incomplete.\n\n#### Units\n\n- `oi` and `volume` are contracts; `theta` is dollars per day.\n- `shares_per_contract` is the contract multiplier, 100 for standard contracts.\n\n#### Freshness\n\nA live chain is re-captured at most every 30 seconds per symbol, and may be up to 5 minutes old while a refresh runs. `captured_at` says when it was taken.\n\n#### Empty results\n\nA symbol with no listed options returns `rows: []`.\n\n#### Example\n\nOne contract (`meta` truncated):\n\n```http\nGET /v2/chain/SPY?expiry=2026-10-02&strike_gte=700000&strike_lte=700000\n```\n\n```json\n{\n  \"data\": {\n    \"spot\": 772.05,\n    \"captured_at\": 1790493741321,\n    \"partial\": false,\n    \"rows\": [\n      {\n        \"contract\": {\n          \"underlying\": \"SPY\",\n          \"expiry\": \"2026-10-02\",\n          \"right\": \"call\",\n          \"strike\": 700000\n        },\n        \"oi\": 507,\n        \"volume\": 256,\n        \"bid\": 71.57,\n        \"ask\": 72.83,\n        \"last\": 71.92,\n        \"fmv\": 72.201,\n        \"iv\": 0.4379,\n        \"delta\": 0.9666,\n        \"gamma\": 0.0018,\n        \"theta\": -0.3226,\n        \"vega\": 0.0924,\n        \"shares_per_contract\": 100\n      }\n    ]\n  },\n  \"meta\": {\n    \"cache\": \"miss\",\n    \"row_count\": 1,\n    \"underlying\": \"SPY\"\n  }\n}\n```",
+        "description": "Every listed contract of one underlying from a single capture, with quotes, open interest, implied volatility and greeks.\n\nRead it live, or as of a past time with `at`. Every row is valued against the capture's one `spot`, and `partial: true` marks a capture known to be incomplete.\n\n#### Units\n\n- `oi` and `volume` are contracts; `theta` is dollars per day.\n- `shares_per_contract` is the contract multiplier, 100 for standard contracts.\n\n#### Freshness\n\nA live chain is re-captured at most every 30 seconds per symbol, and may be up to 5 minutes old while a refresh runs. `captured_at` says when it was taken.\n\nWith an API key, a live chain's `spot` is the latest price from the ITMatrixHQ price engine at request time, or `null` when it has none.\n\n#### Empty results\n\nA symbol with no listed options returns `rows: []`.\n\n#### Limits\n\nA key may have 6 history reads in flight at once (14 on Pro), shared across stock bars, GEX session history and `at=` reads of the GEX grid and the option chain; a seventh (fifteenth on Pro) `at=` read gets `429 rate_limited`.\n\n#### Example\n\nOne contract (`meta` truncated):\n\n```http\nGET /v2/chain/SPY?expiry=2026-10-02&strike_gte=700000&strike_lte=700000\n```\n\n```json\n{\n  \"data\": {\n    \"spot\": 772.05,\n    \"captured_at\": 1790493741321,\n    \"partial\": false,\n    \"rows\": [\n      {\n        \"contract\": {\n          \"underlying\": \"SPY\",\n          \"expiry\": \"2026-10-02\",\n          \"right\": \"call\",\n          \"strike\": 700000\n        },\n        \"oi\": 507,\n        \"volume\": 256,\n        \"bid\": 71.57,\n        \"ask\": 72.83,\n        \"last\": 71.92,\n        \"fmv\": 72.201,\n        \"iv\": 0.4379,\n        \"delta\": 0.9666,\n        \"gamma\": 0.0018,\n        \"theta\": -0.3226,\n        \"vega\": 0.0924,\n        \"shares_per_contract\": 100\n      }\n    ]\n  },\n  \"meta\": {\n    \"cache\": \"miss\",\n    \"row_count\": 1,\n    \"underlying\": \"SPY\"\n  }\n}\n```",
         "operationId": "chain_getChain",
         "parameters": [
           {
@@ -6031,6 +6752,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Reserved. Omit it.",
+            "in": "query",
+            "name": "plane",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-param-exposure": "app-only"
           }
         ],
         "responses": {
@@ -6106,6 +6837,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "market.live",
         "x-symbol-scoped": true
       }
@@ -6168,6 +6900,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Reserved. Omit it.",
+            "in": "query",
+            "name": "plane",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-param-exposure": "app-only"
           }
         ],
         "responses": {
@@ -6228,8 +6970,266 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "market.reference",
         "x-symbol-scoped": true
+      }
+    },
+    "/v2/chat": {
+      "post": {
+        "description": "Runs one turn of the chart console as a stream of events.\n\nThe utterance and the terminal's scene (as text) go in and events come out (`turn`, `text`, `tool_delta`, `tool_use`, `done`, or `error`); the browser applies the proposed changes and reports the outcome on its next request.\n\nPro members plus the developer and admin roles, in-app only (anyone else, and an `itm_` key, gets `403 not_entitled_tier`); errors before the first event are ordinary JSON errors, a failure after it is an `error` event.\n\n#### Limits\n\n32 KiB body, 2000 characters per utterance, a 16 KiB scene, 20 requests per minute and 400 per UTC day per account, one turn at a time per conversation, and a durable daily allowance per account (turns and spend) plus a global daily spend cap. Past a limit: `429 rate_limited` with `Retry-After` (`day` resets at 00:00 UTC).",
+        "operationId": "chat_postChat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{v: 2, tools_hash, conversation, upstream, input, results, scene, notes, compact?}`; unknown fields are refused.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "A `text/event-stream` of the turn"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — the message names the field"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated` / `token_expired`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — below Pro and not a dev or admin account, an API key, or `fixture_disabled`; `attestation_required` without a market-data classification"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found` — `conversation_unknown`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `turn_in_progress`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `body_too_large`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`rate_limited` (reason `minute`, `day` or `upstream`), with `Retry-After`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — `upstream_rejected`: the model service refused the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — `awaiting_api_key`, `disabled`, `credential_rejected`, `upstream_overloaded`, `budget_exhausted` or `limiter_unavailable`"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — `upstream_timeout`"
+          }
+        },
+        "summary": "Chart console turn",
+        "tags": [
+          "chat"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "pro",
+        "x-scope-group": "chat"
+      }
+    },
+    "/v2/chat/outcome": {
+      "post": {
+        "description": "Reports what the user did with a chart console receipt after the turn.\n\nThe planner's result once applied (`applied`), an undo, a hand edit of what the receipt wrote (`edit`, field by field), a thumbs up or down with an optional note (`rating`), or the chat being cleared (`clear`). Recorded in the chat telemetry; the rating note and the edited values only while text capture is on.\n\nPro members plus the developer and admin roles, in-app only.\n\n#### Limits\n\n8 KiB body, a 500-character rating note, 32 edited fields, 20 requests per minute and 400 per UTC day per account (counted apart from turns).",
+        "operationId": "chat_postOutcome",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{kind: applied|undo|edit|rating|clear, conversation, turn, receipt, …}`; unknown fields are refused.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`{captured, recorded}` in `data`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — the message names the field"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated` / `token_expired`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` / `attestation_required`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `body_too_large`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`rate_limited` (reason `minute` or `day`), with `Retry-After`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — `disabled`"
+          }
+        },
+        "summary": "Chart console outcome",
+        "tags": [
+          "chat"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "pro",
+        "x-scope-group": "chat"
+      }
+    },
+    "/v2/chat/status": {
+      "get": {
+        "description": "Reports whether the chart console can reach a model and which limits apply to the caller.\n\nWhether the console can reach a model (`live`: `armed`, `awaiting_key` or `disabled`), whether the scripted fixture is available, the model and the limits in force, the caller's own daily allowance (`quota`), and the day's list-price spend estimate (the caller's own; the global day for staff). The console calls it when it opens and picks its upstream from the answer; `outcomes` says it should post its outcome signals.\n\nPro members plus the developer and admin roles.",
+        "operationId": "chat_getStatus",
+        "responses": {
+          "200": {
+            "description": "`{live, fixture, model, effort, thinking, tools_hash, limits, budget, fixture_utterances?, capture?, outcomes?, quota?}` in `data`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated` / `token_expired`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` / `attestation_required`"
+          }
+        },
+        "summary": "Chart console status",
+        "tags": [
+          "chat"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "pro",
+        "x-scope-group": "chat"
       }
     },
     "/v2/darkpool/breadth": {
@@ -6314,6 +7314,16 @@
               }
             },
             "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` (below site Basic, or an API key) / `attestation_required` (no market-data classification; a professional trial gets `not_entitled_tier` with `details.reason = trial_professional`) — gated like the Options Lab"
           }
         },
         "summary": "Dark-pool breadth",
@@ -6321,7 +7331,9 @@
           "analytics.darkpool"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "free",
+        "x-min-tier": "basic",
+        "x-plane": "lake",
+        "x-requires-attestation": true,
         "x-scope-group": "analytics.darkpool"
       }
     },
@@ -6466,6 +7478,16 @@
               }
             },
             "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` (below site Basic, or an API key) / `attestation_required` (no market-data classification; a professional trial gets `not_entitled_tier` with `details.reason = trial_professional`) — gated like the Options Lab"
           }
         },
         "summary": "Dark-pool scanner",
@@ -6473,13 +7495,186 @@
           "analytics.darkpool"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "free",
+        "x-min-tier": "basic",
+        "x-plane": "lake",
+        "x-requires-attestation": true,
         "x-scope-group": "analytics.darkpool"
+      }
+    },
+    "/v2/darkpool/{symbol}/levels": {
+      "get": {
+        "description": "One stock's off-exchange volume, notional and trade count at each price level, per session.\n\nRows are ascending by session, then price, and page through `meta.cursor`.\n\n#### Units\n\n- `price_thousandths` is the price in thousandths of a dollar (`766295` = $766.295).\n- `volume` is shares.\n\n#### Freshness\n\nEnd of day: a session appears the morning after it trades.\n\n#### Empty results\n\nA symbol or range with no data returns an empty `data` list and a `meta.note`.\n\n#### Example\n\nOne price level (`meta` truncated):\n\n```http\nGET /v2/darkpool/SPY/levels?limit=1\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"ticker\": \"SPY\",\n      \"date\": \"2026-09-25\",\n      \"price_thousandths\": 766295,\n      \"volume\": 226.0,\n      \"notional\": 173182.67,\n      \"trade_count\": 3\n    }\n  ],\n  \"meta\": {\n    \"session\": \"2026-09-25\",\n    \"count\": 1\n  }\n}\n```",
+        "operationId": "darkpool_getLevels",
+        "parameters": [
+          {
+            "description": "Stock symbol, e.g. `SPY`",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "First session of the range: epoch ms, `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM[:SS]`. Without `from` and `to`, the latest session.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last session of the range, inclusive, in the same forms as `from`.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The one session to read for `footprint`, `intraday`, `prints` and `structure`: `today` (default) or a date in the same forms as `from`.",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA time zone for date and time strings (default `America/New_York`).",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Minimum print notional, dollars (`blocks`, `prints`).",
+            "in": "query",
+            "name": "notional_gte",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Minimum print notional over the trailing 20 sessions' 90th-percentile print notional (`prints`).",
+            "in": "query",
+            "name": "rel_gte",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "`true` keeps only prints repeated in the same minute at the same cent (`prints`).",
+            "in": "query",
+            "name": "clustered",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Lookback in sessions for `concentration`: `20` (the default) or `5`.",
+            "in": "query",
+            "name": "lookback",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comma-separated condition categories (`blocks`, `prints`). Default: `regular_way,package_price`, and `all` keeps every category.",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rows per page: default 500, at most 5,000.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The `meta.cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Vec_DarkPoolLevelRow"
+                }
+              }
+            },
+            "description": "Rows in `data`, ascending by session and price; `meta.session` and `meta.cursor`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — a bad parameter"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` / `attestation_required` / `not_entitled_symbol` — your plan, declaration or the symbol does not cover this data"
+          }
+        },
+        "summary": "Dark-pool price levels",
+        "tags": [
+          "analytics.darkpool"
+        ],
+        "x-exposure": "public",
+        "x-min-tier": "free",
+        "x-plane": "lake",
+        "x-scope-group": "analytics.darkpool",
+        "x-symbol-scoped": true
       }
     },
     "/v2/darkpool/{symbol}/{dataset}": {
       "get": {
-        "description": "One end-of-day off-exchange dataset for one symbol, built from the consolidated tape's off-exchange prints.\n\n| dataset | holds | parameters |\n|---|---|---|\n| `daily` | off-exchange volume, notional, share and VWAP per session | `from`, `to` |\n| `stats` | per-session trailing percentiles and large-print scores | `from`, `to` |\n| `concentration` | notional concentration across price levels | `from`, `to`, `lookback` |\n| `prints` | individual large off-exchange prints | `date`, `notional_gte`, `rel_gte`, `clustered` |\n| `levels` | notional by price level | `from`, `to` |\n| `blocks` | block-size prints by condition category | `from`, `to`, `notional_gte`, `category` |\n| `footprint` | one session's price-by-time footprint | `date` |\n| `intraday` | one session's off-exchange activity by minute | `date` |\n| `composition` | volume by condition category per session | `from`, `to` |\n| `structure` | one snapshot of large prints, clusters, price zones and events | `to` or `date` |\n\n`structure` is one object; the other datasets are ascending by session and page through `meta.cursor`. In-app only: requests with an API key get `403 not_entitled_tier`. API keys read off-exchange data from `/v2/offexchange/{symbol}/*`.\n\n#### Units\n\n- Volumes are shares, and shares of volume are fractions (`0.54` = 54%).\n- There is no buy or sell side: off-exchange prints carry no aggressor.\n\n#### Freshness\n\nEnd of day: a session appears the morning after it trades.\n\n#### Empty results\n\nA symbol or date with no data returns an empty `data` list and a `meta.note`.\n\n#### Limits\n\n`structure` reads at most 60 sessions and 40,000 prints of $1M or more, and a larger sample is an error.\n\n#### Example\n\nOne session of the `daily` dataset (`meta` truncated):\n\n```http\nGET /v2/darkpool/SPY/daily?from=2026-09-25&to=2026-09-25\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"ticker\": \"SPY\",\n      \"date\": \"2026-09-25\",\n      \"off_exch_volume\": 15912149.66,\n      \"off_exch_pct\": 0.434,\n      \"notional\": 12252745897.15,\n      \"consolidated_volume\": 36666826.66,\n      \"consolidated_notional\": 28237860090.62,\n      \"vwap\": 769.657,\n      \"avg_size\": 60.47,\n      \"trade_count\": 263130\n    }\n  ],\n  \"meta\": {\n    \"session\": \"2026-09-25\",\n    \"latest_session\": \"2026-09-25\",\n    \"history_sessions\": 130,\n    \"count\": 1,\n    \"cursor\": null\n  }\n}\n```",
+        "description": "One end-of-day off-exchange dataset for one symbol, built from the consolidated tape's off-exchange prints.\n\n| dataset | holds | parameters |\n|---|---|---|\n| `daily` | off-exchange volume, notional, share and VWAP per session | `from`, `to` |\n| `stats` | per-session trailing percentiles and large-print scores | `from`, `to` |\n| `concentration` | notional concentration across price levels | `from`, `to`, `lookback` |\n| `prints` | individual large off-exchange prints | `date`, `notional_gte`, `rel_gte`, `clustered` |\n| `levels` | notional by price level | `from`, `to` |\n| `blocks` | block-size prints by condition category | `from`, `to`, `notional_gte`, `category` |\n| `footprint` | one session's price-by-time footprint | `date` |\n| `intraday` | one session's off-exchange activity by minute | `date` |\n| `composition` | volume by condition category per session | `from`, `to` |\n| `structure` | one snapshot of large prints, clusters, price zones and events | `to` or `date` |\n\n`structure` is one object; the other datasets are ascending by session and page through `meta.cursor`. In-app only: requests with an API key get `403 not_entitled_tier`, except `levels`, which API keys read from `GET /v2/darkpool/{symbol}/levels`.\n\n#### Units\n\n- Volumes are shares, and shares of volume are fractions (`0.54` = 54%).\n- There is no buy or sell side: off-exchange prints carry no aggressor.\n\n#### Freshness\n\nEnd of day: a session appears the morning after it trades.\n\n#### Empty results\n\nA symbol or date with no data returns an empty `data` list and a `meta.note`.\n\n#### Limits\n\n`structure` reads at most 60 sessions of prints of $1M or more.\n\n#### Example\n\nOne session of the `daily` dataset (`meta` truncated):\n\n```http\nGET /v2/darkpool/SPY/daily?from=2026-09-25&to=2026-09-25\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"ticker\": \"SPY\",\n      \"date\": \"2026-09-25\",\n      \"off_exch_volume\": 15912149.66,\n      \"off_exch_pct\": 0.434,\n      \"notional\": 12252745897.15,\n      \"consolidated_volume\": 36666826.66,\n      \"consolidated_notional\": 28237860090.62,\n      \"vwap\": 769.657,\n      \"avg_size\": 60.47,\n      \"trade_count\": 263130\n    }\n  ],\n  \"meta\": {\n    \"session\": \"2026-09-25\",\n    \"latest_session\": \"2026-09-25\",\n    \"history_sessions\": 130,\n    \"count\": 1,\n    \"cursor\": null\n  }\n}\n```",
         "operationId": "darkpool_getDataset",
         "parameters": [
           {
@@ -6566,7 +7761,7 @@
             }
           },
           {
-            "description": "Lookback in sessions for `concentration`: only `20`, the default.",
+            "description": "Lookback in sessions for `concentration`: `20` (the default) or `5`.",
             "in": "query",
             "name": "lookback",
             "required": false,
@@ -6634,6 +7829,16 @@
               }
             },
             "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` (below site Basic, or an API key) / `attestation_required` (no market-data classification; a professional trial gets `not_entitled_tier` with `details.reason = trial_professional`) / `not_entitled_symbol` — gated like the Options Lab"
           }
         },
         "summary": "Dark-pool datasets",
@@ -6641,7 +7846,9 @@
           "analytics.darkpool"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "free",
+        "x-min-tier": "basic",
+        "x-plane": "lake",
+        "x-requires-attestation": true,
         "x-scope-group": "analytics.darkpool",
         "x-symbol-scoped": true
       }
@@ -6726,6 +7933,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "econ.public"
       }
     },
@@ -6781,12 +7989,13 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "vendor",
         "x-scope-group": "econ.public"
       }
     },
     "/v2/flow/eod": {
       "get": {
-        "description": "The largest option prints of one session, ranked by premium, market-wide or for one underlying.\n\nWith `symbol`, the answer is that underlying's own top 100, not its slice of the market-wide list. API keys read the equities list, and Pro app sessions also see index options. Needs a Pro app session or an API Pro key, plus a non-professional declaration.\n\n#### Units\n\n`price` is per share, `size` is contracts, and `rank` 1 is the session's largest premium.\n\n#### Freshness\n\nWritten after each session closes; `data.scanned_at_ms` says when.\n\n#### Empty results\n\nA session with nothing stored returns `session_date: null`, empty `prints` and a `meta.note`.\n\n#### Limits\n\nRequests with an API key must send `session`, and `symbol` or `min_premium_usd`.\n\n#### Example\n\nThe top print of one session (`prints` and `meta` truncated):\n\n```http\nGET /v2/flow/eod?session=2026-09-04&symbol=SPY\n```\n\n```json\n{\n  \"data\": {\n    \"session_date\": \"2026-09-04\",\n    \"symbol\": \"SPY\",\n    \"tier\": \"free\",\n    \"limit\": 100,\n    \"coverage_status\": \"eod_reconciled\",\n    \"scanned_at_ms\": 1788677257387,\n    \"prints\": [\n      {\n        \"print_id\": \"single_block:O:SPY260918P00760000:1788531722824:382#0\",\n        \"event_id\": \"single_block:O:SPY260918P00760000:1788531722824:382\",\n        \"underlying\": \"SPY\",\n        \"contract\": {\n          \"underlying\": \"SPY\",\n          \"expiry\": \"2026-09-18\",\n          \"right\": \"put\",\n          \"strike\": 760000\n        },\n        \"price\": 3.25,\n        \"size\": 32460,\n        \"premium_usd\": 10549500.0,\n        \"exchange\": 323,\n        \"conditions\": [233],\n        \"event_ts_ms\": 1788531722824,\n        \"sequence\": 382,\n        \"session_date\": \"2026-09-04\",\n        \"coverage_status\": \"eod_reconciled\",\n        \"rank\": 1\n      }\n    ]\n  },\n  \"meta\": {\n    \"count\": 100\n  }\n}\n```",
+        "description": "The largest option prints of one session, ranked by premium, market-wide or for one underlying.\n\nWith `symbol`, the answer is that underlying's own top 100, not its slice of the market-wide list. API keys read the equities list, and Basic or Pro app sessions also see index options. Needs a Basic or Pro app session or an API key on either plan (API Explorer or API Pro), plus a market-data declaration (non-professional on an API key).\n\n#### Units\n\n`price` is per share, `size` is contracts, and `rank` 1 is the session's largest premium.\n\n#### Freshness\n\nWritten after each session closes; `data.scanned_at_ms` says when.\n\n#### Empty results\n\nA session with nothing stored returns `session_date: null`, empty `prints` and a `meta.note`.\n\n#### Limits\n\nRequests with an API key must send `session`, and `symbol` or `min_premium_usd`.\n\n#### Example\n\nThe top print of one session (`prints` and `meta` truncated):\n\n```http\nGET /v2/flow/eod?session=2026-09-04&symbol=SPY\n```\n\n```json\n{\n  \"data\": {\n    \"session_date\": \"2026-09-04\",\n    \"symbol\": \"SPY\",\n    \"tier\": \"free\",\n    \"limit\": 100,\n    \"coverage_status\": \"eod_reconciled\",\n    \"scanned_at_ms\": 1788677257387,\n    \"prints\": [\n      {\n        \"print_id\": \"single_block:O:SPY260918P00760000:1788531722824:382#0\",\n        \"event_id\": \"single_block:O:SPY260918P00760000:1788531722824:382\",\n        \"underlying\": \"SPY\",\n        \"contract\": {\n          \"underlying\": \"SPY\",\n          \"expiry\": \"2026-09-18\",\n          \"right\": \"put\",\n          \"strike\": 760000\n        },\n        \"price\": 3.25,\n        \"size\": 32460,\n        \"premium_usd\": 10549500.0,\n        \"exchange\": 323,\n        \"conditions\": [233],\n        \"event_ts_ms\": 1788531722824,\n        \"sequence\": 382,\n        \"session_date\": \"2026-09-04\",\n        \"coverage_status\": \"eod_reconciled\",\n        \"rank\": 1\n      }\n    ]\n  },\n  \"meta\": {\n    \"count\": 100\n  }\n}\n```",
         "operationId": "flow_getEod",
         "parameters": [
           {
@@ -6892,7 +8101,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — needs Pro in the app or API Pro on a key. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — needs Basic or Pro in the app, or an API key on either plan (API Explorer or API Pro). `attestation_required` — declare your market-data classification first (non-professional on an API key). A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -6910,14 +8119,15 @@
           "analytics.flow"
         ],
         "x-exposure": "public",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "hot",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
     },
     "/v2/flow/large-trades": {
       "get": {
-        "description": "Blocks, sweeps and multi-leg executions from the options tape, newest first, for one underlying or the whole market.\n\nEach event lists its legs and carries its own `coverage`: `observed_live` during the session, and `eod_reconciled` once the end-of-day reconciliation replaces it. Needs a Pro app session or an API Pro key, plus a non-professional declaration.\n\n#### Units\n\nPrices are per share, and `size` and `total_size` are contracts.\n\n#### Freshness\n\nEvents appear as they are detected, and the feed holds about the last 24 hours.\n\n#### Empty results\n\nNo qualifying trades returns `events: []`.\n\n#### Limits\n\nRequests with an API key must send `symbol` or `min_premium_usd`, and get at most 100 events per request.\n\n#### Example\n\nOne single-block event (`meta` truncated):\n\n```http\nGET /v2/flow/large-trades?symbol=SPY&min_premium_usd=1000000&limit=1\n```\n\n```json\n{\n  \"data\": {\n    \"events\": [\n      {\n        \"symbol\": \"SPY\",\n        \"seq\": 382,\n        \"coverage\": {\n          \"status\": \"observed_live\",\n          \"complete\": false,\n          \"session_date\": \"2026-09-04\",\n          \"observed_from_ms\": 1788528600000,\n          \"observed_through_ms\": 1788531723000,\n          \"registry_version\": 1,\n          \"standard_multiplier_assumed\": true\n        },\n        \"update\": {\n          \"kind\": \"big_trade\",\n          \"event\": {\n            \"event_id\": \"single_block:O:SPY260918P00760000:1788531722824:382\",\n            \"event_kind\": \"single_block\",\n            \"underlying\": \"SPY\",\n            \"event_ts_ms\": 1788531722824,\n            \"legs\": [\n              {\n                \"contract\": {\n                  \"underlying\": \"SPY\",\n                  \"expiry\": \"2026-09-18\",\n                  \"right\": \"put\",\n                  \"strike\": 760000\n                },\n                \"price\": 3.25,\n                \"size\": 32460,\n                \"premium_usd\": 10549500.0,\n                \"exchange\": 323,\n                \"conditions\": [233],\n                \"event_ts_ms\": 1788531722824,\n                \"sequence\": 382,\n                \"side\": \"unknown\",\n                \"multi_leg\": false\n              }\n            ],\n            \"total_size\": 32460,\n            \"premium_usd\": 10549500.0,\n            \"price_low\": 3.25,\n            \"price_high\": 3.25,\n            \"side\": \"unknown\",\n            \"multi_leg\": false\n          }\n        }\n      }\n    ]\n  },\n  \"meta\": {\n    \"count\": 1,\n    \"limit\": 1,\n    \"retention\": \"intraday_24h\"\n  }\n}\n```",
+        "description": "Blocks, sweeps and multi-leg executions from the options tape, newest first, for one underlying or the whole market.\n\nEach event lists its legs and carries its own `coverage`: `observed_live` during the session, and `eod_reconciled` once the end-of-day reconciliation replaces it. Needs a Basic or Pro app session or an API key on either plan (API Explorer or API Pro), plus a market-data declaration (non-professional on an API key).\n\n#### Units\n\nPrices are per share, and `size` and `total_size` are contracts.\n\n#### Freshness\n\nEvents appear as they are detected, and the feed holds about the last 24 hours.\n\n#### Empty results\n\nNo qualifying trades returns `events: []`.\n\n#### Limits\n\nRequests with an API key must send `symbol` or `min_premium_usd`, and get at most 100 events per request.\n\n#### Example\n\nOne single-block event (`meta` truncated):\n\n```http\nGET /v2/flow/large-trades?symbol=SPY&min_premium_usd=1000000&limit=1\n```\n\n```json\n{\n  \"data\": {\n    \"events\": [\n      {\n        \"symbol\": \"SPY\",\n        \"seq\": 382,\n        \"coverage\": {\n          \"status\": \"observed_live\",\n          \"complete\": false,\n          \"session_date\": \"2026-09-04\",\n          \"observed_from_ms\": 1788528600000,\n          \"observed_through_ms\": 1788531723000,\n          \"registry_version\": 1,\n          \"standard_multiplier_assumed\": true\n        },\n        \"update\": {\n          \"kind\": \"big_trade\",\n          \"event\": {\n            \"event_id\": \"single_block:O:SPY260918P00760000:1788531722824:382\",\n            \"event_kind\": \"single_block\",\n            \"underlying\": \"SPY\",\n            \"event_ts_ms\": 1788531722824,\n            \"legs\": [\n              {\n                \"contract\": {\n                  \"underlying\": \"SPY\",\n                  \"expiry\": \"2026-09-18\",\n                  \"right\": \"put\",\n                  \"strike\": 760000\n                },\n                \"price\": 3.25,\n                \"size\": 32460,\n                \"premium_usd\": 10549500.0,\n                \"exchange\": 323,\n                \"conditions\": [233],\n                \"event_ts_ms\": 1788531722824,\n                \"sequence\": 382,\n                \"side\": \"unknown\",\n                \"multi_leg\": false\n              }\n            ],\n            \"total_size\": 32460,\n            \"premium_usd\": 10549500.0,\n            \"price_low\": 3.25,\n            \"price_high\": 3.25,\n            \"side\": \"unknown\",\n            \"multi_leg\": false\n          }\n        }\n      }\n    ]\n  },\n  \"meta\": {\n    \"count\": 1,\n    \"limit\": 1,\n    \"retention\": \"intraday_24h\"\n  }\n}\n```",
         "operationId": "flow_getLargeTrades",
         "parameters": [
           {
@@ -6998,7 +8208,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — needs Pro in the app or API Pro on a key. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — needs Basic or Pro in the app, or an API key on either plan (API Explorer or API Pro). `attestation_required` — declare your market-data classification first (non-professional on an API key). A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7016,14 +8226,15 @@
           "analytics.flow"
         ],
         "x-exposure": "public",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
     },
     "/v2/flow/premium": {
       "get": {
-        "description": "Call and put premium, prints and contracts in five-minute buckets, summed over one underlying's large-trade legs.\n\nThe two latest sessions come from the live feed and may be incomplete, and older ones from end-of-day scans where available. `meta.session_coverage` says what each session covered. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Pro and a non-professional declaration.\n\n#### Units\n\n`ts_ms` is the bucket start.\n\n#### Empty results\n\nA missing bucket means unknown, not zero. With no coverage, `buckets` is empty and `coverage_status` is `unavailable`.",
+        "description": "Call and put premium, prints and contracts in five-minute buckets, summed over one underlying's large-trade legs.\n\nThe two latest sessions come from the live feed and may be incomplete, and older ones from end-of-day scans where available. `meta.session_coverage` says what each session covered. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Basic or Pro and a market-data declaration.\n\n#### Units\n\n`ts_ms` is the bucket start.\n\n#### Empty results\n\nA missing bucket means unknown, not zero. With no coverage, `buckets` is empty and `coverage_status` is `unavailable`.",
         "operationId": "flow_getPremium",
         "parameters": [
           {
@@ -7123,7 +8334,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7141,14 +8352,15 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
     },
     "/v2/flow/prints": {
       "get": {
-        "description": "Every leg of every large option trade from about the last 24 hours, newest first, as raw prints without trade structure or side.\n\nFilters apply before `limit`, so a time window reaches back through the day. For the grouped events, use `GET /v2/flow/large-trades`. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Pro and a non-professional declaration.\n\n#### Units\n\n`price` is per share, and `size` is contracts.\n\n#### Empty results\n\nNo matching prints returns `prints: []`.",
+        "description": "Every leg of every large option trade from about the last 24 hours, newest first, as raw prints without trade structure or side.\n\nFilters apply before `limit`, so a time window reaches back through the day. For the grouped events, use `GET /v2/flow/large-trades`. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Basic or Pro and a market-data declaration.\n\n#### Units\n\n`price` is per share, and `size` is contracts.\n\n#### Empty results\n\nNo matching prints returns `prints: []`.",
         "operationId": "flow_getPrints",
         "parameters": [
           {
@@ -7265,7 +8477,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7283,14 +8495,15 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
     },
     "/v2/flow/uoa": {
       "get": {
-        "description": "Scored unusual options activity episodes from about the last 24 hours, filtered and sorted server-side.\n\nFilters apply before `limit`, so a narrow window reaches back through the session. Feed rows leave out the per-print evidence, which `GET /v2/flow/uoa/{event_id}` carries. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Pro and a non-professional declaration.\n\n#### Empty results\n\nNo matching episodes returns `events: []`. A named symbol that is not supported is `404 not_found`.\n\n#### Example\n\nA quiet feed (`meta` truncated):\n\n```http\nGET /v2/flow/uoa?limit=1\n```\n\n```json\n{\n  \"data\": {\n    \"events\": []\n  },\n  \"meta\": {\n    \"count\": 0,\n    \"limit\": 1,\n    \"sort\": \"unusualness\",\n    \"retention\": \"intraday_24h\",\n    \"evidence\": \"omitted_on_feed_rows\"\n  }\n}\n```",
+        "description": "Scored unusual options activity episodes from about the last 24 hours, filtered and sorted server-side.\n\nFilters apply before `limit`, so a narrow window reaches back through the session. Feed rows leave out the per-print evidence, which `GET /v2/flow/uoa/{event_id}` carries. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Basic or Pro and a market-data declaration.\n\n#### Empty results\n\nNo matching episodes returns `events: []`. A named symbol that is not supported is `404 not_found`.\n\n#### Example\n\nA quiet feed (`meta` truncated):\n\n```http\nGET /v2/flow/uoa?limit=1\n```\n\n```json\n{\n  \"data\": {\n    \"events\": []\n  },\n  \"meta\": {\n    \"count\": 0,\n    \"limit\": 1,\n    \"sort\": \"unusualness\",\n    \"retention\": \"intraday_24h\",\n    \"evidence\": \"omitted_on_feed_rows\"\n  }\n}\n```",
         "operationId": "flow_getUoa",
         "parameters": [
           {
@@ -7513,7 +8726,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7531,7 +8744,8 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
@@ -7580,7 +8794,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7598,14 +8812,15 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow"
       }
     },
     "/v2/flow/{symbol}/cross-section": {
       "get": {
-        "description": "One underlying's cumulative call and put volume, premium and trade counts for a session, by strike and by expiry.\n\n`coverage.status` is `observed_live`, with `coverage.complete: false`, until the end-of-day reconciliation replaces the section with `eod_reconciled` coverage. Needs a Pro app session or an API Pro key, plus a non-professional declaration.\n\n#### Units\n\nVolumes are contracts, and `*_trade_count` counts prints.\n\n#### Freshness\n\nUpdated as the session trades. Sessions from about the last 24 hours are held.\n\n#### Empty results\n\n`snapshot` is `null`, with a `meta.note`, when no section has been observed for the symbol and session.\n\n#### Example\n\nOne strike and one expiry (`by_strike`, `by_expiration` and `meta` truncated):\n\n```http\nGET /v2/flow/SPY/cross-section?session=2026-09-04\n```\n\n```json\n{\n  \"data\": {\n    \"snapshot\": {\n      \"symbol\": \"SPY\",\n      \"seq\": 51234,\n      \"coverage\": {\n        \"status\": \"observed_live\",\n        \"complete\": false,\n        \"session_date\": \"2026-09-04\",\n        \"observed_from_ms\": 1788528600000,\n        \"observed_through_ms\": 1788552000000,\n        \"registry_version\": 1,\n        \"standard_multiplier_assumed\": true\n      },\n      \"update\": {\n        \"kind\": \"cross_section_session\",\n        \"by_strike\": [\n          {\n            \"strike_thousandths\": 760000,\n            \"measures\": {\n              \"call_volume\": 41250,\n              \"put_volume\": 88310,\n              \"call_premium_usd\": 21870500.0,\n              \"put_premium_usd\": 30112400.0,\n              \"call_trade_count\": 5120,\n              \"put_trade_count\": 7804\n            }\n          }\n        ],\n        \"by_expiration\": [\n          {\n            \"expiry\": \"2026-09-18\",\n            \"measures\": {\n              \"call_volume\": 612400,\n              \"put_volume\": 705980,\n              \"call_premium_usd\": 184300200.0,\n              \"put_premium_usd\": 221450900.0,\n              \"call_trade_count\": 60411,\n              \"put_trade_count\": 71002\n            }\n          }\n        ]\n      }\n    }\n  },\n  \"meta\": {\n    \"symbol\": \"SPY\",\n    \"retention\": \"intraday_24h\"\n  }\n}\n```",
+        "description": "One underlying's cumulative call and put volume, premium and trade counts for a session, by strike and by expiry.\n\n`coverage.status` is `observed_live`, with `coverage.complete: false`, until the end-of-day reconciliation replaces the section with `eod_reconciled` coverage. Needs a Basic or Pro app session or an API key on either plan (API Explorer or API Pro), plus a market-data declaration (non-professional on an API key).\n\n#### Units\n\nVolumes are contracts, and `*_trade_count` counts prints.\n\n#### Freshness\n\nUpdated as the session trades. Sessions from about the last 24 hours are held.\n\n#### Empty results\n\n`snapshot` is `null`, with a `meta.note`, when no section has been observed for the symbol and session.\n\n#### Example\n\nOne strike and one expiry (`by_strike`, `by_expiration` and `meta` truncated):\n\n```http\nGET /v2/flow/SPY/cross-section?session=2026-09-04\n```\n\n```json\n{\n  \"data\": {\n    \"snapshot\": {\n      \"symbol\": \"SPY\",\n      \"seq\": 51234,\n      \"coverage\": {\n        \"status\": \"observed_live\",\n        \"complete\": false,\n        \"session_date\": \"2026-09-04\",\n        \"observed_from_ms\": 1788528600000,\n        \"observed_through_ms\": 1788552000000,\n        \"registry_version\": 1,\n        \"standard_multiplier_assumed\": true\n      },\n      \"update\": {\n        \"kind\": \"cross_section_session\",\n        \"by_strike\": [\n          {\n            \"strike_thousandths\": 760000,\n            \"measures\": {\n              \"call_volume\": 41250,\n              \"put_volume\": 88310,\n              \"call_premium_usd\": 21870500.0,\n              \"put_premium_usd\": 30112400.0,\n              \"call_trade_count\": 5120,\n              \"put_trade_count\": 7804\n            }\n          }\n        ],\n        \"by_expiration\": [\n          {\n            \"expiry\": \"2026-09-18\",\n            \"measures\": {\n              \"call_volume\": 612400,\n              \"put_volume\": 705980,\n              \"call_premium_usd\": 184300200.0,\n              \"put_premium_usd\": 221450900.0,\n              \"call_trade_count\": 60411,\n              \"put_trade_count\": 71002\n            }\n          }\n        ]\n      }\n    }\n  },\n  \"meta\": {\n    \"symbol\": \"SPY\",\n    \"retention\": \"intraday_24h\"\n  }\n}\n```",
         "operationId": "flow_getCrossSection",
         "parameters": [
           {
@@ -7666,7 +8881,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — needs Pro in the app or API Pro on a key. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — needs Basic or Pro in the app, or an API key on either plan (API Explorer or API Pro). `attestation_required` — declare your market-data classification first (non-professional on an API key). A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -7684,7 +8899,8 @@
           "analytics.flow"
         ],
         "x-exposure": "public",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow",
         "x-symbol-scoped": true
@@ -7692,7 +8908,7 @@
     },
     "/v2/fundamentals/{symbol}/{dataset}": {
       "get": {
-        "description": "One fundamentals dataset for one company, with rows in `data.results`, newest first.\n\n| dataset | holds | parameters |\n|---|---|---|\n| `ratios` | market cap, EV, P/E, P/B, EV/EBITDA, dividend yield and more | none |\n| `income` | income statements | `timeframe`, `limit` |\n| `balance-sheet` | balance sheets | `timeframe`, `limit` |\n| `float` | free float, in shares and percent | none |\n| `short-interest` | short interest and days to cover, by settlement date | `limit` |\n| `dividends` | cash dividends with ex, record and pay dates | none |\n\n`income` and `balance-sheet` return one statement period per response, chosen by `timeframe`.\n\n#### Units\n\n- Statement values are whole dollars, and `cash_amount` is dollars per share.\n- `free_float_percent` is percent (`92.1` = 92.1%).\n\n#### Freshness\n\nFetched when you ask. Statements change as companies report, `ratios` daily and `short-interest` each settlement cycle.\n\n#### Empty results\n\nA symbol with no data for the dataset returns an empty `results` list.\n\n#### Example\n\n```http\nGET /v2/fundamentals/AAPL/float\n```\n\n```json\n{\n  \"data\": {\n    \"results\": [\n      {\n        \"ticker\": \"AAPL\",\n        \"effective_date\": \"2026-05-14\",\n        \"free_float\": 13521179933,\n        \"free_float_percent\": 92.1\n      }\n    ],\n    \"status\": \"OK\"\n  },\n  \"meta\": {\n    \"dataset\": \"float\",\n    \"symbol\": \"AAPL\"\n  }\n}\n```",
+        "description": "One fundamentals dataset for one company, with rows in `data.results`, newest first.\n\n| dataset | holds | parameters |\n|---|---|---|\n| `ratios` | market cap, EV, P/E, P/B, EV/EBITDA, dividend yield and more | none |\n| `income` | income statements | `timeframe`, `limit`, `vintage`, `as_of` |\n| `balance-sheet` | balance sheets | `timeframe`, `limit`, `vintage`, `as_of` |\n| `float` | free float, in shares and percent | none |\n| `short-interest` | short interest and days to cover, by settlement date | `limit` |\n| `dividends` | cash dividends with ex, record and pay dates | none |\n\n`income` and `balance-sheet` return one statement period per response, chosen by `timeframe`. `vintage=as_reported` with `as_of` returns only what we had observed by that time. `short-interest` rows carry `published_at`, the date the settlement cycle became public.\n\n#### Units\n\n- Statement values are whole dollars, and `cash_amount` is dollars per share.\n- `free_float_percent` is percent (`92.1` = 92.1%).\n\n#### Freshness\n\nFetched when you ask, except `income` and `balance-sheet` for companies in our nightly capture, which are as fresh as the last capture (`meta.captured_at`, with `meta.source` `store`). Statements change as companies report, `ratios` daily and `short-interest` each settlement cycle.\n\n`vintage=latest`, the default, returns the newest values and is not point-in-time (`meta.pit` is `false`). `vintage=as_reported` never returns a value from before we first saw it. `published_at` is the FINRA publication date when we hold it, else eight sessions after settlement (`meta.publication_rule` is `conservative`).\n\n#### Empty results\n\nA symbol with no data for the dataset returns an empty `results` list.\n\n#### Example\n\n```http\nGET /v2/fundamentals/AAPL/float\n```\n\n```json\n{\n  \"data\": {\n    \"results\": [\n      {\n        \"ticker\": \"AAPL\",\n        \"effective_date\": \"2026-05-14\",\n        \"free_float\": 13521179933,\n        \"free_float_percent\": 92.1\n      }\n    ],\n    \"status\": \"OK\"\n  },\n  \"meta\": {\n    \"dataset\": \"float\",\n    \"symbol\": \"AAPL\"\n  }\n}\n```",
         "operationId": "fundamentals_getDataset",
         "parameters": [
           {
@@ -7732,6 +8948,24 @@
               "maximum": 50,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Which view of the statement history: `latest` (default; the newest values, restated and not point-in-time) or `as_reported` (what we had observed as of `as_of`; the only view a signal or screen may use). `income` and `balance-sheet` only.",
+            "in": "query",
+            "name": "vintage",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "With `vintage=as_reported`: the instant to read the history at, as an RFC 3339 timestamp or a `YYYY-MM-DD` date (the end of that UTC day). Facts first observed after it are not returned.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -7803,13 +9037,14 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "vendor",
         "x-scope-group": "fundamentals.vendor",
         "x-symbol-scoped": true
       }
     },
     "/v2/gex/{symbol}/grid": {
       "get": {
-        "description": "Dealer gamma exposure at every strike of one capture: the live profile, or a past one with `at=`.\n\n`top=N` trims the rows but not the totals, which cover every strike left after expiry filtering. `flip_point` is the price where cumulative net GEX crosses zero, or `null` when it does not. Send `Accept: application/x-protobuf` for the protobuf body (`/v2/rest-protocol.proto`).\n\n#### Units\n\n- GEX values are dollars of dealer hedging per $1 move in the underlying, calls positive and puts negative.\n- Each `*_shares` field is its dollar sibling in shares of the underlying per $1 move: the dollar value divided by `spot`, or by `prior_close_spot` when `spot` is `null`.\n- A live per-strike read with no expiry filtered out takes `gex_shares`, `net_gex_shares` and `max_abs_gex_shares` from share gamma directly, so they can differ slightly from `gex` divided by `spot`.\n\n#### Freshness\n\nA live read serves the latest capture, and a new capture lands every 5 minutes during market hours. Before the day's first capture, and on weekends and holidays, it serves the most recent session with data and names it in `meta.date`. After the 16:00 ET close, settled expiries are dropped from live reads and counted in `meta.expired_filtered`. Symbols outside regular coverage are computed on demand, cached for 10 minutes and marked `meta.origin = \"adhoc\"`.\n\n#### Empty results\n\nA symbol with no listed options returns `strikes: []`, with the session read in `meta.date`.\n\n#### Example\n\nThe single largest strike (`meta` truncated):\n\n```http\nGET /v2/gex/SPY/grid?top=1\n```\n\n```json\n{\n  \"data\": {\n    \"spot\": 764.18,\n    \"prior_close_spot\": 767.81,\n    \"captured_at\": 1790256713559,\n    \"net_gex\": -677777251.96,\n    \"net_gex_shares\": -886934.0,\n    \"flip_point\": null,\n    \"max_abs_gex\": 170798799.48,\n    \"max_abs_gex_shares\": 223506.0,\n    \"strikes\": [\n      {\n        \"strike\": 785000,\n        \"gex\": 170798799.48,\n        \"gex_shares\": 223506.0,\n        \"call_oi\": 222861,\n        \"put_oi\": 15019,\n        \"delta_adj\": 20825953.25,\n        \"delta_adj_shares\": 27252.7\n      }\n    ]\n  },\n  \"meta\": {\n    \"date\": \"2026-09-24\",\n    \"expired_filtered\": 315,\n    \"strike_count\": 1,\n    \"underlying\": \"SPY\"\n  }\n}\n```",
+        "description": "Dealer gamma exposure at every strike of one capture: the live profile, or a past one with `at=`.\n\n`top=N` trims the rows but not the totals, which cover every strike left after expiry filtering. `flip_point` is the price where cumulative net GEX crosses zero, or `null` when it does not. Send `Accept: application/x-protobuf` for the protobuf body (`/v2/rest-protocol.proto`).\n\n#### Units\n\n- GEX values are dollars of dealer hedging per $1 move in the underlying, calls positive and puts negative.\n- Each `*_shares` field is its dollar sibling in shares of the underlying per $1 move: the dollar value divided by `spot`, or by `prior_close_spot` when `spot` is `null`.\n- A live per-strike read with no expiry filtered out takes `gex_shares`, `net_gex_shares` and `max_abs_gex_shares` from share gamma directly, so they can differ slightly from `gex` divided by `spot`.\n\n#### Freshness\n\nA live read serves the latest capture, and a new capture lands every 5 minutes during market hours. Before the day's first capture, and on weekends and holidays, it serves the most recent session with data and names it in `meta.date`. After the 16:00 ET close, settled expiries are dropped from live reads and counted in `meta.expired_filtered`. Symbols outside regular coverage are computed on demand, cached for 10 minutes and marked `meta.origin = \"adhoc\"`.\n\n#### Empty results\n\nA symbol with no listed options returns `strikes: []`, with the session read in `meta.date`.\n\n#### Limits\n\nA key may have 6 history reads in flight at once (14 on Pro), shared across stock bars, GEX session history and `at=` reads of the GEX grid and the option chain; a seventh (fifteenth on Pro) `at=` read gets `429 rate_limited`.\n\n#### Example\n\nThe single largest strike (`meta` truncated):\n\n```http\nGET /v2/gex/SPY/grid?top=1\n```\n\n```json\n{\n  \"data\": {\n    \"spot\": 764.18,\n    \"prior_close_spot\": 767.81,\n    \"captured_at\": 1790256713559,\n    \"net_gex\": -677777251.96,\n    \"net_gex_shares\": -886934.0,\n    \"flip_point\": null,\n    \"max_abs_gex\": 170798799.48,\n    \"max_abs_gex_shares\": 223506.0,\n    \"strikes\": [\n      {\n        \"strike\": 785000,\n        \"gex\": 170798799.48,\n        \"gex_shares\": 223506.0,\n        \"call_oi\": 222861,\n        \"put_oi\": 15019,\n        \"delta_adj\": 20825953.25,\n        \"delta_adj_shares\": 27252.7\n      }\n    ]\n  },\n  \"meta\": {\n    \"date\": \"2026-09-24\",\n    \"expired_filtered\": 315,\n    \"strike_count\": 1,\n    \"underlying\": \"SPY\"\n  }\n}\n```",
         "operationId": "gex_getGrid",
         "parameters": [
           {
@@ -7951,13 +9186,14 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "analytics.gex",
         "x-symbol-scoped": true
       }
     },
     "/v2/gex/{symbol}/history": {
       "get": {
-        "description": "Every GEX capture of one exchange session, oldest first, each shaped like a grid response, for replaying a day.\n\n`from` and `to` narrow the day to an ET window. `meta.session_open` and `meta.session_close` give that date's regular session. `net_gex` and `net_gex_shares` cover the full curve, before any `top` trim.\n\n#### Units\n\n- GEX values are dollars of dealer hedging per $1 move in the underlying, calls positive and puts negative.\n- Each `*_shares` field is its dollar sibling in shares of the underlying per $1 move: the dollar value divided by the capture's `spot`, or by `prior_close_spot` when `spot` is `null`.\n\n#### Freshness\n\nA new capture lands every 5 minutes during the session. A past session does not change, so it carries a strong `ETag` and answers `If-None-Match` with `304 Not Modified`. Today's session carries no `ETag`.\n\n#### Empty results\n\nA weekend, a holiday, a symbol without GEX coverage, or a window with no capture returns `captures: []`.\n\n#### Limits\n\nAPI-key requests that send no `top` get `top=20`, echoed as `meta.top` with `meta.top_defaulted: true`.\n\n#### Example\n\nThe largest strike of each capture, truncated to the first capture and a few `meta` fields:\n\n```http\nGET /v2/gex/SPY/history?date=2026-09-24&top=1\n```\n\n```json\n{\n  \"data\": {\n    \"symbol\": \"SPY\",\n    \"session_date\": \"2026-09-24\",\n    \"captures\": [\n      {\n        \"captured_at\": 1790253412446,\n        \"spot\": 763.36,\n        \"prior_close_spot\": 767.18,\n        \"net_gex\": -1241673953.06,\n        \"net_gex_shares\": -1626590.3,\n        \"flip_point\": null,\n        \"strikes\": [\n          {\n            \"strike\": 760000,\n            \"gex\": -230644255.65,\n            \"gex_shares\": -302143.5,\n            \"call_oi\": 65552,\n            \"put_oi\": 164210,\n            \"delta_adj\": -60586711.02,\n            \"delta_adj_shares\": -79368.5\n          }\n        ]\n      }\n    ]\n  },\n  \"meta\": {\n    \"capture_count\": 12,\n    \"session_open\": \"09:30\",\n    \"session_close\": \"16:00\",\n    \"top\": 1\n  }\n}\n```",
+        "description": "Every GEX capture of one exchange session, oldest first, each shaped like a grid response, for replaying a day.\n\n`from` and `to` narrow the day to an ET window. `meta.session_open` and `meta.session_close` give that date's regular session. `net_gex` and `net_gex_shares` cover the full curve, before any `top` trim.\n\n#### Units\n\n- GEX values are dollars of dealer hedging per $1 move in the underlying, calls positive and puts negative.\n- Each `*_shares` field is its dollar sibling in shares of the underlying per $1 move: the dollar value divided by the capture's `spot`, or by `prior_close_spot` when `spot` is `null`.\n\n#### Freshness\n\nA new capture lands every 5 minutes during the session. A past session does not change, so it carries a strong `ETag` and answers `If-None-Match` with `304 Not Modified`. Today's session carries no `ETag`.\n\n#### Empty results\n\nA weekend, a holiday, a symbol without GEX coverage, or a window with no capture returns `captures: []`.\n\n#### Limits\n\nAPI-key requests that send no `top` get `top=20`, echoed as `meta.top` with `meta.top_defaulted: true`. For an API key, an explicit `top` must be at most 120, a response exceeding the response budget is refused (narrow `from`/`to`), and a bulk response requires gzip, br or zstd in `Accept-Encoding`. A key may have 6 history reads in flight at once (14 on Pro), shared across stock bars, GEX session history and `at=` reads of the GEX grid and the option chain; a seventh (fifteenth on Pro) gets `429 rate_limited`.\n\n#### Example\n\nThe largest strike of each capture, truncated to the first capture and a few `meta` fields:\n\n```http\nGET /v2/gex/SPY/history?date=2026-09-24&top=1\n```\n\n```json\n{\n  \"data\": {\n    \"symbol\": \"SPY\",\n    \"session_date\": \"2026-09-24\",\n    \"captures\": [\n      {\n        \"captured_at\": 1790253412446,\n        \"spot\": 763.36,\n        \"prior_close_spot\": 767.18,\n        \"net_gex\": -1241673953.06,\n        \"net_gex_shares\": -1626590.3,\n        \"flip_point\": null,\n        \"strikes\": [\n          {\n            \"strike\": 760000,\n            \"gex\": -230644255.65,\n            \"gex_shares\": -302143.5,\n            \"call_oi\": 65552,\n            \"put_oi\": 164210,\n            \"delta_adj\": -60586711.02,\n            \"delta_adj_shares\": -79368.5\n          }\n        ]\n      }\n    ]\n  },\n  \"meta\": {\n    \"capture_count\": 12,\n    \"session_open\": \"09:30\",\n    \"session_close\": \"16:00\",\n    \"top\": 1\n  }\n}\n```",
         "operationId": "gex_getHistory",
         "parameters": [
           {
@@ -8085,6 +9321,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "analytics.gex",
         "x-symbol-scoped": true
       }
@@ -8180,8 +9417,224 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "gex",
         "x-symbol-scoped": true
+      }
+    },
+    "/v2/instruments": {
+      "get": {
+        "operationId": "instruments_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "venue",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sector",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_MarketCatalog"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Search the available market instruments.",
+        "tags": [
+          "market.instruments"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-plane": "hot",
+        "x-scope-group": "market.instruments"
+      }
+    },
+    "/v2/instruments/{id}": {
+      "get": {
+        "operationId": "instruments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_MarketInstrument"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Read an instrument's units and available series.",
+        "tags": [
+          "market.instruments"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-plane": "hot",
+        "x-scope-group": "market.instruments"
+      }
+    },
+    "/v2/instruments/{id}/bars": {
+      "get": {
+        "operationId": "instruments_getBars",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "interval",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ms",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ms",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_MarketBars"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Read trade bars over an exclusive UTC millisecond range.",
+        "tags": [
+          "market.instruments"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-plane": "hot",
+        "x-scope-group": "market.instruments"
+      }
+    },
+    "/v2/instruments/{id}/quote": {
+      "get": {
+        "operationId": "instruments_getQuote",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_MarketQuote"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Read an instrument's latest eligible price.",
+        "tags": [
+          "market.instruments"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-plane": "hot",
+        "x-scope-group": "market.instruments"
       }
     },
     "/v2/journal/accounts": {
@@ -8833,6 +10286,56 @@
         ],
         "x-exposure": "app-only",
         "x-min-tier": "free",
+        "x-plane": "hot",
+        "x-scope-group": "fundamentals.vendor"
+      }
+    },
+    "/v2/news/board": {
+      "get": {
+        "description": "The latest published snapshot of recurring news themes and their evidence.",
+        "operationId": "news_getBoard",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Board document in `data`, or null with `meta.note` when empty"
+          },
+          "304": {
+            "description": "Snapshot unchanged"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys are refused"
+          }
+        },
+        "summary": "News frequency board",
+        "tags": [
+          "fundamentals.vendor"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "fundamentals.vendor"
       }
     },
@@ -8954,6 +10457,7 @@
         ],
         "x-exposure": "app-only",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "fundamentals.vendor"
       }
     },
@@ -9071,6 +10575,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.offexchange",
         "x-symbol-scoped": true
@@ -9190,6 +10695,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.offexchange",
         "x-symbol-scoped": true
@@ -9309,6 +10815,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.offexchange",
         "x-symbol-scoped": true
@@ -9428,6 +10935,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.offexchange",
         "x-symbol-scoped": true
@@ -9435,7 +10943,7 @@
     },
     "/v2/openapi.json": {
       "get": {
-        "description": "This OpenAPI 3.1 document: every operation you can call, with its parameters, schemas and entitlements.\n\nNo authentication, and the body is not enveloped. The base URL is `servers[0].url`, and `info.version` changes whenever the public contract does.",
+        "description": "This OpenAPI 3.1 document: every operation you can call, with its parameters, schemas and entitlements.\n\nNo authentication, and the body is not enveloped. The base URL is `servers[0].url`. `info.version` is the backend release version: it moves with every release, and always when the public contract changes.",
         "operationId": "ops_getOpenapi",
         "responses": {
           "200": {
@@ -9570,13 +11078,14 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "pro",
+        "x-plane": "hot",
         "x-scope-group": "market.bars",
         "x-symbol-scoped": true
       }
     },
     "/v2/options/{contract}/footprint": {
       "get": {
-        "description": "One- or five-minute volume-at-price bars for one option contract, built while the contract is open in the ITMatrixHQ apps.\n\nBars are built only while a client is subscribed to the contract, and each level is plain volume at one price, with no side inferred. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Pro and a non-professional declaration.\n\n#### Units\n\n- Level `price` is in thousandths of a dollar, and bar prices are per share.\n- `volume` and `total_volume` are contracts.\n\n#### Empty results\n\nWith no subscriber in the last 5 minutes, `bars` is empty and `meta.demand` is `none`.\n\n#### Limits\n\nAt most 390 one-minute bars, one regular session, per contract.",
+        "description": "One- or five-minute volume-at-price bars for one option contract, built while the contract is open in the ITMatrixHQ apps.\n\nBars are built only while a client is subscribed to the contract, and each level is plain volume at one price, with no side inferred. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Basic or Pro and a market-data declaration.\n\n#### Units\n\n- Level `price` is in thousandths of a dollar, and bar prices are per share.\n- `volume` and `total_volume` are contracts.\n\n#### Empty results\n\nWith no subscriber in the last 5 minutes, `bars` is empty and `meta.demand` is `none`.\n\n#### Limits\n\nAt most 390 one-minute bars, one regular session, per contract.",
         "operationId": "flow_getOptionFootprint",
         "parameters": [
           {
@@ -9646,7 +11155,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -9664,7 +11173,8 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow",
         "x-symbol-scoped": true
@@ -9672,7 +11182,7 @@
     },
     "/v2/options/{contract}/greeks": {
       "get": {
-        "description": "The latest implied volatility and greeks for one option contract, with a one-minute history of them.\n\n`mark` is the option price the solve used. `bid`, `ask` and `spread` are `null` unless a live quote is held for the contract. `series` samples the solve once a minute over the last 390 minutes.\n\n#### Freshness\n\nUpdated with each solve during market hours; the last solve is served outside them.\n\n#### Empty results\n\nA contract that has not been solved returns `latest: null`, `series: []` and a `meta.note`. An underlying not in `GET /v2/symbols` is `404 not_found`.\n\n#### Example\n\nThe latest solve and one minute of history (`series` truncated):\n\n```http\nGET /v2/options/O:SPY260925C00765000/greeks\n```\n\n```json\n{\n  \"data\": {\n    \"contract\": {\n      \"underlying\": \"SPY\",\n      \"expiry\": \"2026-09-25\",\n      \"right\": \"call\",\n      \"strike\": 765000\n    },\n    \"latest\": {\n      \"ts_ms\": 1790256746156,\n      \"iv\": 0.1286,\n      \"delta\": 0.466,\n      \"gamma\": 0.0455,\n      \"mark\": 4.735,\n      \"mark_source\": \"options_trades\",\n      \"bid\": null,\n      \"ask\": null,\n      \"spread\": null\n    },\n    \"series\": [\n      {\n        \"ts_ms\": 1790233380000,\n        \"iv\": 0.1286,\n        \"delta\": 0.611,\n        \"gamma\": 0.0436,\n        \"mark\": 4.735\n      }\n    ]\n  }\n}\n```",
+        "description": "The latest implied volatility and greeks for one option contract, with a one-minute history while the contract is streamed.\n\n`mark` is the option price the solve used. `bid`, `ask` and `spread` are `null` unless a live quote is held for the contract. `series` samples the solve once a minute, up to the last 390 minutes, while the contract is streamed, and otherwise holds only the latest solve.\n\n#### Freshness\n\nUpdated with each solve during market hours; the last solve is served outside them.\n\nThe minute series starts when a WebSocket `spot` subscription on the contract opens, is not backfilled, and ends five minutes after the last one closes. Without one, `series` is a single sample, the latest solve on its minute. `meta.series_source` is `ring` or `snapshot` accordingly.\n\n#### Empty results\n\nA contract that has not been solved returns `latest: null`, `series: []` and a `meta.note`. An underlying not in `GET /v2/symbols` is `404 not_found`.\n\n#### Example\n\nThe latest solve and one minute of history (`series` truncated):\n\n```http\nGET /v2/options/O:SPY260925C00765000/greeks\n```\n\n```json\n{\n  \"data\": {\n    \"contract\": {\n      \"underlying\": \"SPY\",\n      \"expiry\": \"2026-09-25\",\n      \"right\": \"call\",\n      \"strike\": 765000\n    },\n    \"latest\": {\n      \"ts_ms\": 1790256746156,\n      \"iv\": 0.1286,\n      \"delta\": 0.466,\n      \"gamma\": 0.0455,\n      \"mark\": 4.735,\n      \"mark_source\": \"options_trades\",\n      \"bid\": null,\n      \"ask\": null,\n      \"spread\": null\n    },\n    \"series\": [\n      {\n        \"ts_ms\": 1790233380000,\n        \"iv\": 0.1286,\n        \"delta\": 0.611,\n        \"gamma\": 0.0436,\n        \"mark\": 4.735\n      }\n    ]\n  }\n}\n```",
         "operationId": "vol_getContractGreeks",
         "parameters": [
           {
@@ -9752,13 +11262,14 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "analytics.vol",
         "x-symbol-scoped": true
       }
     },
     "/v2/options/{contract}/tape": {
       "get": {
-        "description": "Every print of one option contract, newest first, collected while the contract is open in the ITMatrixHQ apps.\n\nPrints are collected only while a client is subscribed to the contract. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Pro and a non-professional declaration.\n\n#### Units\n\n`size` is contracts, and `price` is per share.\n\n#### Empty results\n\nWith no subscriber in the last 5 minutes, `prints` is empty and `meta.demand` is `none`.",
+        "description": "Every print of one option contract, newest first, collected while the contract is open in the ITMatrixHQ apps.\n\nPrints are collected only while a client is subscribed to the contract. In-app only: requests with an API key get `403 not_entitled_tier`, and app sessions need Basic or Pro and a market-data declaration.\n\n#### Units\n\n`size` is contracts, and `price` is per share.\n\n#### Empty results\n\nWith no subscriber in the last 5 minutes, `prints` is empty and `meta.demand` is `none`.",
         "operationId": "flow_getOptionTape",
         "parameters": [
           {
@@ -9830,7 +11341,7 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — an API key, or no Pro plan. `attestation_required` — declare non-professional use first."
+            "description": "`not_entitled_tier` — an API key, or a Free plan. `attestation_required` — declare your market-data classification first. A professional trial gets `not_entitled_tier` with `details.reason = trial_professional`."
           },
           "404": {
             "content": {
@@ -9848,7 +11359,8 @@
           "analytics.flow"
         ],
         "x-exposure": "app-only",
-        "x-min-tier": "pro",
+        "x-min-tier": "basic",
+        "x-plane": "memory",
         "x-requires-attestation": true,
         "x-scope-group": "analytics.flow",
         "x-symbol-scoped": true
@@ -9927,6 +11439,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "analytics.vol",
         "x-symbol-scoped": true
       }
@@ -10004,13 +11517,14 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "analytics.vol",
         "x-symbol-scoped": true
       }
     },
     "/v2/quotes": {
       "get": {
-        "description": "The latest price, prior close, percent change and session volume for up to 180 symbols, in request order.\n\n`net_gex` and `gex_change` are `null` for now; use `GET /v2/gex/{symbol}/grid`.\n\n#### Units\n\n- `change_pct` is percent (`-0.72` = -0.72%) against `official_close`, the prior session's close.\n- `volume` is shares.\n\n#### Freshness\n\n`spot` is the latest price while the session trades, and the last close otherwise. `event_ts_ms` is `null` when the price comes from a daily bar.\n\n#### Empty results\n\nA symbol with no recent price is a row of `null`s, and one your plan cannot read is an empty row listed in `meta.restricted`. With an API key, naming an index symbol is `403 not_entitled_symbol`.\n\n#### Example\n\n```http\nGET /v2/quotes?symbols=AAPL\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"symbol\": \"AAPL\",\n      \"spot\": 341.44,\n      \"change_pct\": 1.64,\n      \"net_gex\": null,\n      \"gex_change\": null,\n      \"volume\": 30001611,\n      \"official_close\": 335.92,\n      \"session_date\": \"2026-09-25\",\n      \"event_ts_ms\": 1790380731536\n    }\n  ],\n  \"meta\": {\n    \"count\": 1\n  }\n}\n```",
+        "description": "The latest price, prior close, percent change and session volume for up to 180 symbols, in request order.\n\n`net_gex` and `gex_change` are `null` for now; use `GET /v2/gex/{symbol}/grid`.\n\n#### Units\n\n- `change_pct` is percent (`-0.72` = -0.72%) against `official_close`, the prior session's close.\n- `volume` is shares.\n\n#### Freshness\n\n`spot` is the latest price while the session trades, and the last close otherwise. `event_ts_ms` is `null` when the price comes from a daily bar.\n\n#### Empty results\n\nA symbol with no recent price is a row of `null`s, and one your plan cannot read is an empty row listed in `meta.restricted`. With an API key, naming an index symbol is `403 not_entitled_symbol`.\n\nWith an API key, `spot` is the latest price from the ITMatrixHQ price engine, `event_ts_ms` is its time and `session_date` its session; `change_pct`, `official_close` and `volume` are `null`.\n\n#### Example\n\n```http\nGET /v2/quotes?symbols=AAPL\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"symbol\": \"AAPL\",\n      \"spot\": 341.44,\n      \"change_pct\": 1.64,\n      \"net_gex\": null,\n      \"gex_change\": null,\n      \"volume\": 30001611,\n      \"official_close\": 335.92,\n      \"session_date\": \"2026-09-25\",\n      \"event_ts_ms\": 1790380731536\n    }\n  ],\n  \"meta\": {\n    \"count\": 1\n  }\n}\n```",
         "operationId": "market_getQuotes",
         "parameters": [
           {
@@ -10071,6 +11585,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "market.live",
         "x-symbol-scoped": true
       }
@@ -10172,6 +11687,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "market.screener"
       }
     },
@@ -10228,12 +11744,1534 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "market.screener"
+      }
+    },
+    "/v2/social/configs": {
+      "post": {
+        "description": "Stores a config and returns its id. The body is `{\"kind\", \"schema_version\", \"body\"}`; `kind` is `app.chart`, `app.chartspage`, `app.gexpage` or `app.workspace`, at schema version 1. The id is derived from the content, so sharing the same config again returns the same id. The server reads the symbols from the body. Refusals carry `details.reason`: `config_kind`, `unsupported_version`, `config_invalid` (with `details.path`), `config_too_large` (over 256 KiB) or `body_invalid`. In-app only.",
+        "operationId": "social_shareConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{kind, schema_version, body}`",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, kind, schema_version, symbols, body, created_at}` in `data`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `config_kind`, `unsupported_version`, `config_invalid`, `config_too_large` or `body_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot share configs"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Share a config",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/configs/{id}": {
+      "get": {
+        "description": "One config by id, with its body and the symbols the server read from it. Unknown ids are `404`. In-app only.",
+        "operationId": "social_getConfig",
+        "parameters": [
+          {
+            "description": "The config id (`cfg_` and 32 hex)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, kind, schema_version, symbols, body, created_at}` in `data`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read configs"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "A config",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/configs/{id}/load": {
+      "post": {
+        "description": "Records that the signed-in account loaded this config and returns it, the same body as the read. The body is `{\"source\", \"post_id\"?}`; `source` is `feed`, `profile`, `link` or `file`, and `post_id`, when given, must be a live post of this config. Nothing is counted or shown from loads yet. In-app only.",
+        "operationId": "social_loadConfig",
+        "parameters": [
+          {
+            "description": "The config id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{source, post_id?}`",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, kind, schema_version, symbols, body, created_at}` in `data`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `load_source` or `body_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot load configs"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found` — no such config, or the post is not a live post of it"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Load a config",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/feed": {
+      "get": {
+        "description": "Live posts, newest first. `zone` is `all` (default) or `following` (posts by people you follow). Filters, all applied by the server: `kind`, `symbol`, `symbols` (comma-separated; any match, e.g. your watched symbols), `tag` (a published tag) and `q`, which matches the title, description, author handle, a symbol or a published tag; a term starting with `@` matches the author handle only. Pages with `cursor` (from `meta.cursor`) and `limit` (1-50, default 24). No counts or rankings. In-app only.",
+        "operationId": "social_getFeed",
+        "parameters": [
+          {
+            "description": "`all` (default) or `following`.",
+            "in": "query",
+            "name": "zone",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A config kind.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A symbol.",
+            "in": "query",
+            "name": "symbol",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated symbols; a post matches when it names any of them.",
+            "in": "query",
+            "name": "symbols",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A published tag.",
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Search; a term starting with `@` matches the author handle only.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `meta.cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Posts per page: 1 to 50 (default 24).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Posts in `data` (the post shape), `meta.cursor` when there is more"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read the feed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "The feed",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/follows/{id}": {
+      "delete": {
+        "description": "Stops following the profile with this public id. Idempotent. In-app only.",
+        "operationId": "social_unfollow",
+        "parameters": [
+          {
+            "description": "The profile's public id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, following, counts: {followers, following}}` in `data`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `follow_self`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot follow"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Unfollow a profile",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      },
+      "put": {
+        "description": "Follows the profile with this public id. Idempotent. Needs a profile of your own (`409`, `details.reason` `profile_required`); following yourself is `400` `follow_self`. In-app only.",
+        "operationId": "social_follow",
+        "parameters": [
+          {
+            "description": "The profile's public id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, following, counts: {followers, following}}` in `data`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `follow_self`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot follow"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `profile_required`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Follow a profile",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/posts": {
+      "get": {
+        "description": "Up to 50 live posts in one read, for refreshing a screen of cards and their pictures in one call: `?ids=pst_…,pst_…`. Rows come back in the order asked, each once, in the shape `GET /v2/social/posts/{id}` returns, with a fresh `preview` for this viewer. Unknown and deleted posts are left out, not refused. `400` `ids_invalid` when `ids` is empty, names more than 50 posts or holds something that is not a post id. In-app only.",
+        "operationId": "social_getPosts",
+        "parameters": [
+          {
+            "description": "Comma-separated post ids, 1 to 50.",
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The live posts among `ids` in `data`, in the order asked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `ids_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read posts"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Posts by id",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      },
+      "post": {
+        "description": "Posts a shared config to ITM Social. The body is `{\"config_id\", \"title\", \"description\"?, \"tags\"?}`: a title of 1-120 characters on one line, a description up to 1000 characters, and up to 8 tags the author chose to publish (lower-case, 1-24 characters of letters, digits, space, `_` or `-`). A post never changes; publish a new config for a new version. Refusals carry `details.reason`: `400` `title_invalid`, `description_invalid`, `tags_invalid` or `body_invalid`; `404` when the config is unknown; `409` `profile_required` without a claimed profile. In-app only.",
+        "operationId": "social_publish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{config_id, title, description?, tags?}`",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The post in `data`: `{id, config_id, kind, schema_version, title, description, tags, symbols, author: {id, handle, display_name, followers}, created_at}`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `title_invalid`, `description_invalid`, `tags_invalid` or `body_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot publish"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found` — no config has this id"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `profile_required`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Publish a config",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/posts/{id}": {
+      "delete": {
+        "description": "Hides one of your own posts from the feed and your profile. The config stays, so links to it keep working. Its picture stops being served at once and its stored image is removed, unless another live post has the same image. Someone else's post, or one already deleted, is `404`. In-app only.",
+        "operationId": "social_deletePost",
+        "parameters": [
+          {
+            "description": "The post id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{deleted: id}` in `data`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot delete posts"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Delete a post",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      },
+      "get": {
+        "description": "One live post by id. Unknown or deleted posts are `404`. In-app only.",
+        "operationId": "social_getPost",
+        "parameters": [
+          {
+            "description": "The post id (`pst_` and 16 hex)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The post in `data`, the shape `POST /v2/social/posts` returns"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read posts"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "A post",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/posts/{id}/preview": {
+      "put": {
+        "description": "Attaches a picture to one of your own posts, once. The body is `{\"content_type\", \"width\", \"height\", \"data_base64\"}`; `content_type` is `image/webp` or `image/jpeg`. The width and height served are read from the image, not the body. EXIF, XMP and other metadata (a location included) are removed before the picture is kept. Refusals carry `details.reason`: `400` `preview_type`, `preview_too_large` (over 300 KiB or 960px on the long edge), `preview_invalid` or `body_invalid`; `409` `preview_set` when the post already has one. Someone else's post is `404`. In-app only.",
+        "operationId": "social_putPreview",
+        "parameters": [
+          {
+            "description": "The post id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{content_type, width, height, data_base64}`",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The post in `data`, with its `preview`"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `preview_type`, `preview_too_large`, `preview_invalid` or `body_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot add pictures"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` `preview_set`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Add a picture to a post",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/preview/{id}": {
+      "get": {
+        "description": "The image behind a post row's `preview.url`. The signature in the link is the credential, because an image tag cannot send a token. An expired or altered link, or a deleted post, is `404`. In-app only.",
+        "operationId": "social_getPreview",
+        "parameters": [
+          {
+            "description": "The post id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "When the link expires, epoch milliseconds.",
+            "in": "query",
+            "name": "exp",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The link's signature.",
+            "in": "query",
+            "name": "sig",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "The image"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          }
+        },
+        "summary": "A post's picture",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/profile": {
+      "get": {
+        "description": "The signed-in account's public profile, or `null` in `data` when it has not claimed one. In-app only: API keys get `403 not_entitled_tier`.",
+        "operationId": "social_getOwnProfile",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, handle, display_name, bio, counts: {followers, following}, handle_change_allowed_at, created_at, updated_at}` in `data`, or `null`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read profiles"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Your profile",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      },
+      "put": {
+        "description": "Claims the signed-in account's profile, or replaces it. The body is the whole profile: `{\"handle\", \"display_name\"?, \"bio\"?}`; an absent or empty display name or bio clears it. A handle is `itm` followed by 2-21 lowercase letters, digits or underscores. Refusals carry `details.reason`: `400` `handle_invalid`, `handle_reserved`, `display_name_invalid` (over 50 characters or more than one line) or `bio_invalid` (over 280 characters); `409` `handle_taken`, `handle_retired` (someone else gave it up; it is never reissued) or `handle_cooldown` (the handle changed within 30 days; `details.allowed_at` says when it may change). In-app only.",
+        "operationId": "social_saveOwnProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "`{handle, display_name?, bio?}`",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The saved profile in `data`, the shape `GET /v2/social/profile` returns"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `handle_invalid`, `handle_reserved`, `display_name_invalid` or `bio_invalid`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot save profiles"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params` — `details.reason` is `handle_taken`, `handle_retired` or `handle_cooldown`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Save your profile",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/profile/available": {
+      "get": {
+        "description": "Whether `PUT /v2/social/profile` would accept this handle for the signed-in account, by the same rules. `reason` is `invalid`, `reserved`, `taken` or `retired` when it would not, and `current` when it is already yours. In-app only.",
+        "operationId": "social_checkHandle",
+        "parameters": [
+          {
+            "description": "The handle to check, with its `itm` prefix",
+            "in": "query",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{handle, available, reason?}` in `data`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot check handles"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "Check a handle",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/profiles/{handle}": {
+      "get": {
+        "description": "Someone's public profile by handle. A handle its owner has since changed resolves to their current profile; `handle` in the response is the current one. Unknown handles are `404`. In-app only.",
+        "operationId": "social_getProfile",
+        "parameters": [
+          {
+            "description": "The handle, with its `itm` prefix",
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "`{id, handle, display_name, bio, counts: {followers, following}, viewer_follows, joined_at, posts, top_symbols}` in `data`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read profiles"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "A profile",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
+      }
+    },
+    "/v2/social/profiles/{handle}/posts": {
+      "get": {
+        "description": "One profile's live posts, newest first, the same rows as the feed. A retired handle resolves to its owner. Pages with `cursor` and `limit`. Unknown handles are `404`. In-app only.",
+        "operationId": "social_getProfilePosts",
+        "parameters": [
+          {
+            "description": "The handle, with its `itm` prefix",
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The `meta.cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Posts per page: 1 to 50 (default 24).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Posts in `data`, `meta.cursor` when there is more"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`invalid_params`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_entitled_tier` — API keys cannot read posts"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`internal` — try again"
+          }
+        },
+        "summary": "A profile's posts",
+        "tags": [
+          "social"
+        ],
+        "x-exposure": "app-only",
+        "x-min-tier": "free",
+        "x-roles": [
+          "admin",
+          "dev",
+          "beta"
+        ],
+        "x-scope-group": "social"
       }
     },
     "/v2/stocks/{symbol}/bars": {
       "get": {
-        "description": "OHLCV bars for one stock over `[from, to)`, ascending, at one-second to daily resolution.\n\nPage through a long range by repeating the request with `cursor` set to `meta.cursor` until it is absent. `meta.complete_through` is the last complete bar; the bar after it can still change.\n\n#### Units\n\n`volume` is shares.\n\n#### Empty results\n\nA real ticker with no bars in the range returns an empty `data` list. An unknown ticker is `404 not_found`.\n\n#### Limits\n\nRequests with an API key get at most 1,000 bars per page and a span of at most 7 days at `1s` and `1m`, 30 days at `5m`, 90 days at `1h` or 2 years at `1d`. A longer span or larger `limit` is clamped, and `meta.caps.applied` lists `range_clamped` or `limit_clamped`. A key may have 2 requests in flight on this route; a third gets `429 rate_limited`.\n\n#### Example\n\nTwo daily bars (`data` and `meta` truncated):\n\n```http\nGET /v2/stocks/SPY/bars?timeframe=1d&from=2026-09-21&to=2026-09-26\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"symbol\": \"SPY\",\n      \"timeframe\": \"1d\",\n      \"ts_ms\": 1790035200000,\n      \"open\": 774.03,\n      \"high\": 775.14,\n      \"low\": 772.57,\n      \"close\": 773.38,\n      \"volume\": 34802336,\n      \"trade_count\": 470399\n    },\n    {\n      \"symbol\": \"SPY\",\n      \"timeframe\": \"1d\",\n      \"ts_ms\": 1790121600000,\n      \"open\": 772.79,\n      \"high\": 773.05,\n      \"low\": 766.5,\n      \"close\": 767.81,\n      \"volume\": 54931688,\n      \"trade_count\": 614754\n    }\n  ],\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    },\n    \"complete_through\": 1790308800000,\n    \"row_count\": 5\n  }\n}\n```",
+        "description": "OHLCV bars for one stock over `[from, to)`, ascending, at one-second to daily resolution.\n\nWith an API key the finest resolution is five minutes: `1s` and `1m` are `400 invalid_params`, and an omitted `timeframe` is `5m`.\n\nPage through a long range by repeating the request with `cursor` set to `meta.cursor` until it is absent. `meta.complete_through` is the last complete bar; the bar after it can still change.\n\n#### Units\n\n`volume` is shares. Prices are on the axis `meta.adjustment` names, with the last corporate action it accounts for: `split` (the default) rescales every bar to today's share count, and `adj=none` serves bars as traded. `meta.basis` names the price source and `meta.coverage_end` whether a daily bar ends at the regular close (`rth`) or the extended one (`extended`). Bars of unequal basis are never stitched silently: `meta.seam` says where they meet, or which rows were left out.\n\n#### Empty results\n\nA real ticker with no bars in the range returns an empty `data` list. An unknown ticker is `404 not_found`.\n\n#### Limits\n\nWith an API key the minimum `timeframe` is `5m`: `5m`, `1h` and `1d` are served, and `1s` or `1m` is `400 invalid_params`.\n\nRequests with an API key get at most 1,000 bars per page and a span of at most 30 days at `5m`, 90 days at `1h` or 2 years at `1d`. A longer span or larger `limit` is clamped, and `meta.caps.applied` lists `range_clamped` or `limit_clamped`. A key may have 6 history reads in flight at once (14 on Pro), shared across stock bars, GEX session history and `at=` reads of the GEX grid and the option chain; a seventh (fifteenth on Pro) gets `429 rate_limited`.\n\n#### Example\n\nTwo daily bars (`data` and `meta` truncated):\n\n```http\nGET /v2/stocks/SPY/bars?timeframe=1d&from=2026-09-21&to=2026-09-26\n```\n\n```json\n{\n  \"data\": [\n    {\n      \"symbol\": \"SPY\",\n      \"timeframe\": \"1d\",\n      \"ts_ms\": 1790035200000,\n      \"open\": 774.03,\n      \"high\": 775.14,\n      \"low\": 772.57,\n      \"close\": 773.38,\n      \"volume\": 34802336,\n      \"trade_count\": 470399\n    },\n    {\n      \"symbol\": \"SPY\",\n      \"timeframe\": \"1d\",\n      \"ts_ms\": 1790121600000,\n      \"open\": 772.79,\n      \"high\": 773.05,\n      \"low\": 766.5,\n      \"close\": 767.81,\n      \"volume\": 54931688,\n      \"trade_count\": 614754\n    }\n  ],\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    },\n    \"complete_through\": 1790308800000,\n    \"row_count\": 5\n  }\n}\n```",
         "operationId": "bars_getBars",
         "parameters": [
           {
@@ -10273,7 +13311,7 @@
             }
           },
           {
-            "description": "Bar size: `1s`, `1m`, `5m`, `1h` or `1d` (default `1m`).",
+            "description": "Bar size: `1s`, `1m`, `5m`, `1h` or `1d` (default `1m`). With an API key: `5m`, `1h` or `1d` (default `5m`).",
             "in": "query",
             "name": "timeframe",
             "required": false,
@@ -10291,6 +13329,16 @@
             }
           },
           {
+            "description": "Price series: `trade|mid` (default `trade`).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-param-exposure": "app-only"
+          },
+          {
             "description": "Bars per page: default 10,000, at most 50,000, or 1,000 with an API key. A larger value is clamped.",
             "in": "query",
             "name": "limit",
@@ -10305,6 +13353,25 @@
             "description": "The `meta.cursor` of the previous page.",
             "in": "query",
             "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Reserved. Omit it.",
+            "in": "query",
+            "name": "plane",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-param-exposure": "app-only"
+          },
+          {
+            "description": "Price axis: `split` (default; every bar rescaled to today's share count) or `none` (as traded). `total` is `400` until dividends are stored; `asof` is an evaluation-time basis and is never served.",
+            "in": "query",
+            "name": "adj",
             "required": false,
             "schema": {
               "type": "string"
@@ -10335,7 +13402,7 @@
                 }
               }
             },
-            "description": "`invalid_params` — a bad time, timeframe or cursor"
+            "description": "`invalid_params` — a bad time, timeframe or cursor, or a timeframe finer than `5m` with an API key"
           },
           "401": {
             "content": {
@@ -10394,6 +13461,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "lake",
         "x-scope-group": "market.bars",
         "x-symbol-scoped": true
       }
@@ -10522,13 +13590,14 @@
         ],
         "x-exposure": "app-only",
         "x-min-tier": "free",
+        "x-plane": "mixed",
         "x-scope-group": "market.bars",
         "x-symbol-scoped": true
       }
     },
     "/v2/stream/ticket": {
       "post": {
-        "description": "A short-lived signed ticket that authenticates the first frame on `GET /v2/ws`.\n\nMint a fresh ticket for each connection. Your entitlements are fixed into the ticket when it is minted, and a free plan without ITMatrixHQ Charts gets `403 not_entitled_tier`.\n\n#### Units\n\n`exp` is epoch **seconds**, 60 seconds after minting.\n\n#### Example\n\nA minted ticket (the `ticket` value is shortened here):\n\n```http\nPOST /v2/stream/ticket\n```\n\n```json\n{\n  \"data\": {\n    \"ticket\": \"eyJ1aWQiOiJ1c2VyLTEyMyIsInRpZXIiOiJwcm8ifQ==\",\n    \"exp\": 1790493799\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    }\n  }\n}\n```",
+        "description": "A short-lived signed ticket that authenticates the first frame on `GET /v2/ws`.\n\nMint a fresh ticket for each connection. Your entitlements are fixed into the ticket when it is minted, and a free plan without ITMatrixHQ Charts gets `403 not_entitled_tier`.\n\n#### Units\n\n`exp` is epoch **seconds**, 60 seconds after minting.\n\n#### Limits\n\nAPI Explorer and API Pro keys can stream `gex` through the official ITMatrixHQ SDK, version 1.1.0 or later. An API Explorer account holds 5 connections and 25 GEX subscriptions, and an API Pro account holds 100 connections and 1,000 GEX subscriptions. While key streaming is switched off for an account, its key gets `403 not_entitled_tier` with `details.reason` set to `stream_preview`. An account at its connection limit gets `429 quota_exceeded` with `details.reason` set to `connection_limit` and `details.limit`.\n\n#### Example\n\nA minted ticket (the `ticket` value is shortened here):\n\n```http\nPOST /v2/stream/ticket\n```\n\n```json\n{\n  \"data\": {\n    \"ticket\": \"eyJ1aWQiOiJ1c2VyLTEyMyIsInRpZXIiOiJwcm8ifQ==\",\n    \"exp\": 1790493799\n  },\n  \"meta\": {\n    \"caps\": {\n      \"tier\": \"pro\",\n      \"applied\": []\n    }\n  }\n}\n```",
         "operationId": "stream_createTicket",
         "responses": {
           "200": {
@@ -10559,7 +13628,17 @@
                 }
               }
             },
-            "description": "`not_entitled_tier` — the plan has no streaming"
+            "description": "`not_entitled_tier`: the plan has no streaming, or streaming with an API key is not enabled for the account (`details.reason` is `stream_preview`)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "`quota_exceeded`: the account is at its connection limit (`details.reason` is `connection_limit`, with `details.limit`). `rate_limited` carries `Retry-After`"
           },
           "503": {
             "content": {
@@ -10827,6 +13906,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "market.reference"
       }
     },
@@ -10883,6 +13963,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "market.reference"
       }
     },
@@ -10939,12 +14020,13 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "hot",
         "x-scope-group": "market.reference"
       }
     },
     "/v2/symbols/{symbol}/spot": {
       "get": {
-        "description": "The latest price of one symbol from `GET /v2/symbols`, taken from its most recent daily bar.\n\nUse `GET /v2/quotes` for many symbols at once.\n\n#### Freshness\n\nThe current session's bar as it builds, otherwise the last completed session's.\n\n#### Empty results\n\n`price` and `ts` are `null` when there is no recent bar. A symbol not in `GET /v2/symbols` is `404 not_found`.\n\n#### Example\n\n```http\nGET /v2/symbols/AAPL/spot\n```\n\n```json\n{\n  \"data\": {\n    \"symbol\": \"AAPL\",\n    \"price\": 341.07,\n    \"ts\": 1790294400000\n  }\n}\n```",
+        "description": "The latest price of one symbol from `GET /v2/symbols`, taken from its most recent daily bar.\n\nUse `GET /v2/quotes` for many symbols at once.\n\n#### Freshness\n\nThe current session's bar as it builds, otherwise the last completed session's.\n\n#### Empty results\n\n`price` and `ts` are `null` when there is no recent bar. A symbol not in `GET /v2/symbols` is `404 not_found`.\n\nWith an API key, `price` is the latest price from the ITMatrixHQ price engine and `ts` is the time of that price; both are `null` when the engine has no price for the symbol.\n\n#### Example\n\n```http\nGET /v2/symbols/AAPL/spot\n```\n\n```json\n{\n  \"data\": {\n    \"symbol\": \"AAPL\",\n    \"price\": 341.07,\n    \"ts\": 1790294400000\n  }\n}\n```",
         "operationId": "market_getSpot",
         "parameters": [
           {
@@ -11005,6 +14087,7 @@
         ],
         "x-exposure": "public",
         "x-min-tier": "free",
+        "x-plane": "memory",
         "x-scope-group": "market.live",
         "x-symbol-scoped": true
       }
@@ -11168,7 +14251,7 @@
     },
     "/v2/ws": {
       "get": {
-        "description": "Upgrades to the streaming WebSocket, authenticated by a ticket from `POST /v2/stream/ticket` in the first frame.\n\nThe handshake takes no `Authorization` header. Entitlements are checked on that first frame and on every subscription, and the wire format is `/v2/ws-protocol.proto`.",
+        "description": "Upgrades to the streaming WebSocket, authenticated by a ticket from `POST /v2/stream/ticket` in the first frame.\n\nThe handshake takes no `Authorization` header. Entitlements are checked on that first frame and on every subscription, and the wire format is `/v2/ws-protocol.proto`.\n\n#### Limits\n\nA key streams `gex` only, through the official ITMatrixHQ SDK 1.1.0 or later, which uses the protobuf encoding and identifies itself in the first frame. A key that does not meet these terms is refused with a `nack` and the socket closes.",
         "operationId": "stream_connectWs",
         "responses": {
           "101": {
@@ -11210,7 +14293,7 @@
                 }
               }
             },
-            "description": "The versioned stream protocol registry."
+            "description": "The versioned binary-block registry (ids, layouts, scale factors, proto version)."
           },
           "400": {
             "content": {
@@ -11325,6 +14408,11 @@
       "x-exposure": "app-only"
     },
     {
+      "description": "Market instruments and UTC trade series",
+      "name": "market.instruments",
+      "x-exposure": "app-only"
+    },
+    {
       "description": "Real-time exchange-derived state (chain, quotes, spot)",
       "name": "market.live",
       "x-exposure": "app-only"
@@ -11350,7 +14438,7 @@
       "x-exposure": "public"
     },
     {
-      "description": "Streaming surface: tickets, WebSocket",
+      "description": "Streaming surface: tickets, WebSocket, block registry",
       "name": "stream",
       "x-exposure": "app-only"
     },
@@ -11360,8 +14448,43 @@
       "x-exposure": "app-only"
     },
     {
+      "description": "Billing and sign-in handoff (internal)",
+      "name": "billing",
+      "x-exposure": "internal"
+    },
+    {
+      "description": "Legal-document acceptance (internal)",
+      "name": "legal",
+      "x-exposure": "internal"
+    },
+    {
+      "description": "Chart console proxy (app-only, Pro)",
+      "name": "chat",
+      "x-exposure": "app-only"
+    },
+    {
+      "description": "ITMScript series catalog (internal until the series service ships)",
+      "name": "series",
+      "x-exposure": "internal"
+    },
+    {
+      "description": "itmsocial profiles and follows (app-only)",
+      "name": "social",
+      "x-exposure": "app-only"
+    },
+    {
+      "description": "Admin drill-down (internal)",
+      "name": "admin",
+      "x-exposure": "internal"
+    },
+    {
       "description": "Service infrastructure (internal)",
       "name": "ops",
+      "x-exposure": "internal"
+    },
+    {
+      "description": "Acquisition attribution (internal)",
+      "name": "marketing",
       "x-exposure": "internal"
     }
   ]

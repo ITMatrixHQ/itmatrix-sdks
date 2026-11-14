@@ -21,20 +21,22 @@ Take credentials from the application's configured environment and keep them out
 - Envelope: success is `{data, meta}`. An error is `{error: {code, message, details}}`, and the `x-request-id` response header identifies the request.
 - Retries: retry only GETs that return 429, 502, 503 or 504. Honour `Retry-After` and cap the attempts. Never retry a mutation blindly.
 - Caching: send `If-None-Match` with a stored ETag. A 304 has no body, so reuse data only if you actually kept it.
-- Streams: `POST /v2/stream/ticket`, then the WebSocket at `/v2/ws` framed by the ws protobuf schema. Prefer the SDK stream, which already handles tickets, reconnects and backpressure.
+- Streams: `POST /v2/stream/ticket`, then the WebSocket at `/v2/ws` framed by the ws protobuf schema. Prefer the SDK stream, which already handles tickets, reconnects and backpressure. Do not hand-build a keyed GEX stream. It needs the SDK protocol (see Streams).
 
 ## Choose the smallest useful method
 
 - Direct reads: `get_gex` / `getGex`, `get_option_chain` / `getOptionChain`, `get_bars` / `getBars`.
 - For a New York calendar period, use `get_bars_for_period(symbol, "today")` or `getBarsForPeriod(symbol, "today")`. The other periods are `week_to_date`, `month_to_date`, `year_to_date`, and `calendar_month` with a `YYYY-MM` month. Today defaults to 1-minute bars and longer periods to daily bars. These return **one page**, not a complete observed month.
 - For GEX levels, `get_gex_analysis` / `getGexAnalysis` fetches and analyzes in one call, and `analyze_gex` / `analyzeGex` works on a grid you already have. Server `net_gex` and the nullable `flip_point` give net exposure and zero gamma. The positive and negative level rankings cover only the returned strike rows, so `top` or tier limits can hide stronger levels. Do not call them full-chain walls, and do not infer market direction from the sign of exposure.
-- `flow` gives bounded public options-flow views. `offexchange` gives the synthetic activity, concentration, profile and composition views. Live large trades need a symbol or a premium floor. EOD flow needs a session plus one of those. Server attestation and entitlements still apply.
+- `flow` gives bounded public options-flow views. `offexchange` gives the synthetic activity, concentration, profile and composition views, and `levels`, off-exchange volume by price level per session (end of day; no buy or sell side). Live large trades need a symbol or a premium floor. EOD flow needs a session plus one of those. For an API key the three flow reads and the four synthetic off-exchange views need a non-professional classification on the account. Without it the key gets `403 attestation_required`. `levels` does not need it.
 
 ## Keep what the response says
 
 - Keep `data` together with its metadata, HTTP status, request ID and ETag whenever the caller needs provenance or cache behaviour.
 - Before presenting a result as current or complete, check freshness, coverage, session or capture, caps, and any `partial` or `delayed` signal.
 - Keep nulls as nulls. An unavailable zero gamma or a missing price is not zero.
+- Bars are split-adjusted unless `adj="none"`. For point-in-time fundamentals in a backtest or screen, use `vintage="as_reported"` with `as_of`; the default `latest` view includes later restatements.
+- If the client warns that a newer SDK release exists, say so and give the upgrade command. In Python, `result.raw` holds fields newer than the installed models.
 - Units:
   - GEX values are dollars of dealer hedging per $1 move. Each has a served `*_shares` sibling in shares of the underlying; use it rather than dividing by a price yourself.
   - Timestamps ending in `_ms` are epoch milliseconds.
@@ -45,6 +47,16 @@ Take credentials from the application's configured environment and keep them out
 ## Streams
 
 Python streams use `AsyncITMClient`. TypeScript streams use `client.stream`. Keep one shared connection and a bounded set of subscriptions, and close them through their lifecycle methods. A ticket authorizes one connection handshake: mint a new ticket for a real reconnect, not because a healthy connection's ticket expired. Treat a backpressure error as data loss that needs an explicit recovery decision.
+
+### GEX book stream for API keys
+
+SDK 1.1.0 adds a GEX stream for `itm_` keys on API Explorer and API Pro. If key streaming is switched off for the account, the key gets `not_entitled_tier` with the reason `stream_preview`. Do not retry that error. Check that the installed SDK is 1.1.0 or later before using it.
+
+- Python: `async with client.stream.gex_book("SPY") as book: async for state in book:`. TypeScript: `for await (const state of client.stream.gexBook("SPY"))`. Each `state` is a `GexBookState` with `strikes`, `call_gex`, `put_gex`, `gex` (call plus put), `net_gex`, `flip_point` (nullable) and `spot`. The book holds the 120 strikes with the largest gross GEX and updates about every 5 seconds. Pass a filter such as `nearest(20)` to choose strikes. Keep a null `flip_point` as null.
+- The stream carries `gex` only. Spot, stocks, index, chain and market topics are refused for keys, and so are index symbols.
+- One SDK client is one connection. Subscribe once per symbol and keep it open. Limits are per account: Explorer 5 connections and 25 subscriptions, Pro 100 and 1,000, and 50 subscriptions per connection. The server refuses over a limit and never evicts.
+- Let the SDK reconnect. Do not add your own retry loop around it. `stream_preview`, `client_outdated`, `client_required`, `proto_required` and `protobuf_required` are terminal. `connection_limit` needs at least 30 seconds of backoff.
+- The stream requires the SDK protocol: protobuf, the `itmatrixhq.v1` subprotocol and a client name. The server cannot verify the SDK was used. Do not present this as a security control. Details: `docs/streaming.md`.
 
 ## Minimal examples
 

@@ -37,6 +37,7 @@ from .resources import (
     WatchlistsResource,
 )
 from .stream import Stream
+from .version import CURRENT_HEADER, SDK_HEADER, client_name, notice_current
 
 M = TypeVar("M", bound=Message)
 
@@ -216,6 +217,7 @@ class ITMClient:
         timeframe: str | None = None,
         tz: str | None = None,
         source: Literal["trade", "mid"] | None = None,
+        adj: Literal["split", "none"] | None = None,
         limit: int | None = None,
         cursor: str | None = None,
         timeout: float | None = None,
@@ -228,6 +230,7 @@ class ITMClient:
                 "timeframe": timeframe,
                 "tz": tz,
                 "source": source,
+                "adj": adj,
                 "limit": limit,
                 "cursor": cursor,
             },
@@ -384,7 +387,8 @@ class ITMClient:
         for attempt in range(self._retries + 1):
             headers = {
                 "Accept": accept
-                or ("application/x-protobuf" if protobuf else "application/json")
+                or ("application/x-protobuf" if protobuf else "application/json"),
+                SDK_HEADER: client_name(),
             }
             credential = await _credential(self._credential)
             if credential:
@@ -414,6 +418,7 @@ class ITMClient:
                 )
                 continue
 
+            notice_current(response.headers.get(CURRENT_HEADER))
             request_id = response.headers.get("x-request-id")
             etag = response.headers.get("etag")
             if response.status_code == 304:
@@ -425,12 +430,14 @@ class ITMClient:
             if response_type.startswith("application/x-protobuf"):
                 if message_type is None:
                     raise TypeError("protobuf response received without a decoder")
+                message = message_type.FromString(response.content)
                 return Result(
-                    message_type.FromString(response.content),
+                    message,
                     _binary_meta(response.headers),
                     response.status_code,
                     request_id,
                     etag,
+                    raw=message,
                 )
             if "json" not in response_type:
                 return Result(
@@ -439,6 +446,7 @@ class ITMClient:
                     response.status_code,
                     request_id,
                     etag,
+                    raw=response.text,
                 )
 
             value = response.json()
@@ -450,8 +458,9 @@ class ITMClient:
                     response.status_code,
                     request_id,
                     etag,
+                    raw=value["data"],
                 )
-            return Result(value, {}, response.status_code, request_id, etag)
+            return Result(value, {}, response.status_code, request_id, etag, raw=value)
         raise AssertionError("unreachable")
 
 

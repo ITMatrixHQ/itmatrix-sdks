@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import date, datetime
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -13,6 +14,7 @@ from ._wire.rest_pb2 import (
     OffExchangeProfileResponse,
 )
 from .models import (
+    DarkPoolLevelRow,
     OffExchangeActivityRow,
     OffExchangeCompositionRow,
     OffExchangeConcentrationRow,
@@ -107,8 +109,9 @@ class OffExchangeResource:
 
     Individual prints, blocks, intraday cells and evidence snapshots are
     app-only and are not representable through this resource. When the client
-    uses ``transport="protobuf"``, every method negotiates and decodes the
-    endpoint-specific public protobuf message automatically.
+    uses ``transport="protobuf"``, the synthetic analytics negotiate and decode
+    the endpoint-specific public protobuf message automatically; ``levels`` is
+    JSON on either transport.
     """
 
     def __init__(self, request: Requester) -> None:
@@ -147,6 +150,39 @@ class OffExchangeResource:
     ) -> Result[list[OffExchangeCompositionRow] | OffExchangeCompositionResponse]:
         return await self._get(
             symbol, "composition", OffExchangeCompositionResponse, **options
+        )
+
+    async def levels(
+        self,
+        symbol: str,
+        *,
+        from_: str | int | date | datetime | None = None,
+        to: str | int | date | datetime | None = None,
+        tz: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        timeout: float | None = None,
+    ) -> Result[list[DarkPoolLevelRow]]:
+        """Off-exchange volume by price level, one row per session and level.
+
+        ``GET /v2/darkpool/{symbol}/levels``: the one dark-pool dataset an API
+        key reads. Rows ascend by session, then price. Without ``from_`` and
+        ``to`` the latest session is returned; ``from_``/``to`` take epoch ms,
+        ``YYYY-MM-DD`` or ``YYYY-MM-DDTHH:MM[:SS]`` in ``tz`` (default
+        ``America/New_York``). ``limit`` is rows per page (default 500, at most
+        5,000); pass ``meta["cursor"]`` back as ``cursor`` for the next page.
+        End of day: a session appears the morning after it trades.
+        """
+        return await self._request(
+            f"/v2/darkpool/{_symbol(symbol)}/levels",
+            query={
+                "from": from_,
+                "to": to,
+                "tz": tz,
+                "limit": limit,
+                "cursor": cursor,
+            },
+            timeout=timeout,
         )
 
 
@@ -322,6 +358,8 @@ class FundamentalsResource:
         timeframe: Literal["quarterly", "annual", "trailing_twelve_months"]
         | None = None,
         limit: int | None = None,
+        vintage: Literal["latest", "as_reported"] | None = None,
+        as_of: str | date | datetime | None = None,
         if_none_match: str | None = None,
         timeout: float | None = None,
     ) -> Result[Any]:
@@ -329,13 +367,26 @@ class FundamentalsResource:
 
         ``timeframe`` picks the statement period and ``limit`` the row count
         (newest first, 1..=50) for the statement datasets; the backend ignores
-        both for the others. ``if_none_match`` revalidates a cached read — the
-        304 comes back as ``Result(not_modified=True)``, which is cache
-        confirmation, not an empty dataset.
+        both for the others. ``vintage`` applies to ``income`` and
+        ``balance-sheet``: ``"latest"`` (the default) is the newest, restated
+        values; ``"as_reported"`` is what had been observed at ``as_of`` (an
+        RFC 3339 instant, or a ``YYYY-MM-DD`` date meaning the end of that UTC
+        day), the only view a backtest or screen should use. ``as_of`` without
+        ``vintage="as_reported"`` is refused before any request.
+        ``if_none_match`` revalidates a cached read — the 304 comes back as
+        ``Result(not_modified=True)``, which is cache confirmation, not an
+        empty dataset.
         """
+        if as_of is not None and vintage != "as_reported":
+            raise ValueError('as_of needs vintage="as_reported"')
         return await self._request(
             f"/v2/fundamentals/{_symbol(symbol)}/{_id(dataset)}",
-            query={"timeframe": timeframe, "limit": limit},
+            query={
+                "timeframe": timeframe,
+                "limit": limit,
+                "vintage": vintage,
+                "as_of": as_of,
+            },
             if_none_match=if_none_match,
             timeout=timeout,
         )
@@ -577,6 +628,7 @@ SUPPORTED_OPERATIONS = frozenset(
         "offexchange_getConcentration",
         "offexchange_getProfile",
         "offexchange_getComposition",
+        "darkpool_getLevels",
         "economy_getRates",
         "flow_getCrossSection",
         "flow_getEod",
@@ -628,6 +680,37 @@ SUPPORTED_OPERATIONS = frozenset(
     }
 )
 
+# Pinned operations that have no SDK method: the chat, instruments, social and
+# news-board app routes, all app-only (pin 2.20.0).
 INTENTIONALLY_UNSUPPORTED_OPERATIONS = frozenset(
-    {"darkpool_getScanner", "darkpool_getDataset", "darkpool_getBreadth"}
+    {
+        "darkpool_getScanner",
+        "darkpool_getDataset",
+        "darkpool_getBreadth",
+        "chat_postChat",
+        "chat_postOutcome",
+        "chat_getStatus",
+        "instruments_list",
+        "instruments_get",
+        "instruments_getBars",
+        "instruments_getQuote",
+        "news_getBoard",
+        "social_shareConfig",
+        "social_getConfig",
+        "social_loadConfig",
+        "social_getFeed",
+        "social_unfollow",
+        "social_follow",
+        "social_publish",
+        "social_deletePost",
+        "social_getPost",
+        "social_getOwnProfile",
+        "social_saveOwnProfile",
+        "social_checkHandle",
+        "social_getProfile",
+        "social_getProfilePosts",
+        "social_getPosts",
+        "social_getPreview",
+        "social_putPreview",
+    }
 )

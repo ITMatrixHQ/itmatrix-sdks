@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Generic, Literal, TypeVar
 
@@ -43,6 +43,21 @@ class OffExchangeConcentrationRow(TypedDict):
 
 
 class OffExchangeProfileRow(TypedDict):
+    date: str
+    price_thousandths: int
+    volume: float
+    notional: float
+    trade_count: int
+
+
+class DarkPoolLevelRow(TypedDict):
+    """One session's off-exchange volume at one price level.
+
+    ``price_thousandths`` is the exact level (``766295`` = $766.295); volume is
+    shares, notional is dollars, and there is no buy or sell side.
+    """
+
+    ticker: str
     date: str
     price_thousandths: int
     volume: float
@@ -178,3 +193,7 @@ class Result(Generic[T]):
     request_id: str | None = None
     etag: str | None = None
     not_modified: bool = False
+    #: The response body as received, before any typing: the ``data`` of the
+    #: JSON envelope, or the decoded protobuf message. A field the API added
+    #: after this SDK was released is still here. Excluded from equality and repr.
+    raw: Any = field(default=None, compare=False, repr=False)

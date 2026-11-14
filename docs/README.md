@@ -1,6 +1,7 @@
 # SDK documentation
 
 - Package quickstarts: [Python](../python/README.md), [TypeScript](../ts/README.md).
+- [Streaming GEX with an API key](streaming.md).
 - [Encodings and custom codecs](transport.md).
 - [Contract discrepancies and capability differences](contract.md).
 - [Headless studies: SDK bars into the ITMScript runtime](itmscript.md).

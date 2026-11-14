@@ -65,6 +65,9 @@ class BarsOptions(TypedDict):
     timeframe: NotRequired[str]
     tz: NotRequired[str]
     source: NotRequired[Literal["trade", "mid"]]
+    #: Price axis: ``"split"`` (the default; every bar rescaled to today's
+    #: share count) or ``"none"`` (prices as traded).
+    adj: NotRequired[Literal["split", "none"]]
     limit: NotRequired[int]
     cursor: NotRequired[str]
     timeout: NotRequired[float]

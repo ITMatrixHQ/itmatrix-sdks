@@ -51,7 +51,9 @@ client. See [convenience semantics](../docs/convenience.md) before treating
 visible GEX levels as full-chain levels or a month as a completed session set.
 
 `Result` retains `meta`, HTTP `status`, `request_id`, and `etag`. Unknown metadata
-is preserved. Nullable measurements stay `None`; zero is a real value. Timestamps
+is preserved. `result.raw` is the body as received, before typing: the JSON
+envelope's `data`, or the protobuf message. A field the API adds after your
+installed release is there before the SDK types it. Nullable measurements stay `None`; zero is a real value. Timestamps
 are epoch milliseconds, dates are ISO strings, bar/quote prices are dollars, and
 strike filters use integer thousandths of dollars. `row.strike` is a convenient
 dollar value; `row.strike_thousandths` preserves the exact integer. GEX values
@@ -74,8 +76,10 @@ clients. Together with the client's own methods they model **every non-internal
 not modelled.
 
 `client.offexchange` is the typed synthetic surface: `activity`, `concentration`,
-`profile`, and `composition`. `client.darkpool` is a compatibility alias to the
-same safe resource. There is no generic dataset method or raw-evidence route.
+`profile`, and `composition`, plus `levels`, the off-exchange volume by price
+level that an API key can read (`/v2/darkpool/{symbol}/levels`). `client.darkpool`
+is a compatibility alias to the same safe resource. There is no generic dataset
+method or raw-evidence route.
 
 ```python
 with itm.ITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
@@ -89,11 +93,20 @@ with itm.ITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
     # Exact immutable book; captured_at=None means unavailable, not zero.
     reference = client.get_gex_reference("SPY", date="2026-09-25", basis="prev_close")
 
-    # First-party app session only: Pro + CBOE attestation, explicitly partial.
+    # First-party app session only: Basic or higher plus CBOE attestation, explicitly partial.
     premium = client.flow.premium("SPY", sessions=2, dte="zero", min_premium_usd=100_000)
 
     # Our own implied vol, out of the greeks engine.
     term = client.vol.term("SPY")
+
+    # Off-exchange volume by price level over five sessions, first page.
+    levels = client.offexchange.levels("NVDA", from_="2026-11-03", to="2026-11-07")
+
+    # Prices as traded rather than split-adjusted.
+    raw_bars = client.get_bars("NVDA", from_="2024-06-03", to="2024-06-14", timeframe="1d", adj="none")
+
+    # The income statement as it had been reported on a past date.
+    income = client.fundamentals.get("MSFT", "income", vintage="as_reported", as_of="2025-06-30")
 
     # Is the API up, and what does this deployment serve? No credential needed.
     ready = client.info.ready()
@@ -107,8 +120,11 @@ contract rather than a synonym for `health()` — it is non-2xx while the proces
 is still warming up.
 
 Grouped resources and `request("/v2/...")` expose raw JSON data for less common
-operations. Endpoint availability still depends on server entitlements; installing
-an SDK does not grant app-only products such as bars or chain data.
+operations. Endpoint availability still depends on server entitlements. Installing
+an SDK does not grant app-only products such as replay, live flow prints or UOA.
+Bars and option chains are public to API keys. Flow and off-exchange reads also need
+a non-professional classification on the account. Without it a key gets
+`403 attestation_required`. Index symbols are `403 not_entitled_symbol` for keys.
 
 ## Async and streaming
 
@@ -125,10 +141,47 @@ asyncio.run(main())
 ```
 
 Subscriptions live on `AsyncITMClient.stream`; they are bounded async iterators of
-public protobuf frames. See the repository streaming documentation and the
+public protobuf frames. See the [streaming guide](../docs/streaming.md) and the
 `stream.gex(symbol)` / `stream.spot(symbol)` helpers. Close subscriptions with
 `async with` or `aclose()`, and close the client with `async with` or `aclose()`. Falling behind the configured
 queue limit raises an error rather than silently discarding market updates.
+
+### GEX book (API key)
+
+```python
+from itmatrix import filters
+
+async with itm.AsyncITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
+    async with client.stream.gex_book("SPY", filter=filters.nearest(20)) as book:
+        async for state in book:
+            print(state.version, state.spot, state.net_gex, state.flip_point)
+```
+
+`gex_book(symbol)` needs an `itm_` API key on API Explorer or API Pro and
+`pip install -U "itmatrix[stream]"` (SDK 1.1.0 or later). It yields a read-only
+`itm.GexBookState` after every applied keyframe or update: `symbol`, `captured_at`
+(UTC), `book_id`, `version`, `spot`, `net_gex` (the whole-chain total), `flip_point`
+(or `None`), `strikes` in dollars with the exact `strikes_thousandths`, `call_gex`
+and `put_gex` per strike, `gex` (call plus put), `changed` (the indices the latest
+frame updated) and `reason` (why a keyframe was sent, `None` for an update). The
+book carries no open interest.
+
+The book holds the 120 strikes with the largest gross GEX (`|call| + |put|`). The
+filters in `itmatrix.filters` (`nearest(n)`, `within_pct(p)`, `between(lo, hi)`,
+`top(n, by=...)` and `all()`) pick among those strikes. Swap the filter on a live
+book with `book.set_filter(filters.within_pct(0.02))`. The book updates about every
+5 seconds today.
+
+The client keeps the book correct. It checks each keyframe's CRC, applies an update only when the version is
+exactly one ahead and the CRC matches, ignores duplicates, and asks the server for a
+fresh keyframe on any gap or mismatch. It mints a fresh ticket for every connection,
+waits out `Retry-After`, backs off with jitter, resubscribes after a reconnect and
+pings the server every 20 seconds. One client is one connection. A refusal that
+retrying cannot fix (`stream_preview`, `client_outdated`, `proto_required`, `protobuf_required`)
+raises `itm.StreamError` (an `itm.ITMError`) from the loop, with the server's
+`reason` and `terminal`.
+`stream.gex()` still returns raw frames for signed-in sessions. See
+`examples/gex_stream.py` and the [streaming guide](../docs/streaming.md).
 
 ## Client lifecycle
 
@@ -167,6 +220,12 @@ end-to-end deadline including retries. HTTPX transport exceptions propagate.
 Redirects are disabled even for injected clients. The `request` escape hatch
 accepts only `/v2/` paths; query parameters go in `query={...}`. Credentials are
 resolved for each attempt and never attached to arbitrary absolute URLs.
+
+Every request names the SDK in `X-ITM-SDK: itmatrix-python/<version>`. When the
+API answers `X-ITM-SDK-Current` with a newer minor or major release, the client
+issues one `itm.ITMUpgradeWarning` per process with the upgrade command. It never
+raises and patch releases never trigger it. Silence it with
+`ITMATRIX_NO_UPGRADE_CHECK=1` or an ordinary `warnings` filter.
 
 `base_url` must be an HTTP(S) origin and defaults to `itm.DEFAULT_BASE_URL`, the
 one place the package defines it. `api_key` and `token` are mutually exclusive;

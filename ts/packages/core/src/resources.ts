@@ -1,6 +1,8 @@
 import type {
   ApiResult,
   ConditionalOptions,
+  DarkPoolLevelRow,
+  DarkPoolLevelsOptions,
   FundamentalsOptions,
   NotModified,
   OffExchangeActivityRow,
@@ -159,7 +161,10 @@ export class AccountResource {
  * reachable through this public resource.
  */
 export class OffExchangeResource {
-  constructor(private readonly wire: ResourceWireRequester) {}
+  constructor(
+    private readonly wire: ResourceWireRequester,
+    private readonly request?: ResourceRequester,
+  ) {}
 
   private read<Json, Proto>(symbol: string, view: string, options: OffExchangeOptions,
     decoder: (bytes: Uint8Array) => Proto): Promise<ApiResult<Json | Proto>> {
@@ -185,6 +190,23 @@ export class OffExchangeResource {
   composition(symbol: string, options: OffExchangeOptions = {}):
     Promise<ApiResult<OffExchangeCompositionRow[] | OffExchangeCompositionResponse>> {
     return this.read(symbol, "composition", options, OffExchangeCompositionResponse.decode);
+  }
+
+  /**
+   * Off-exchange volume by price level, one row per session and level:
+   * `GET /v2/darkpool/{symbol}/levels`, the one dark-pool dataset an API key
+   * reads. Rows ascend by session, then price. Without `from` and `to` the
+   * latest session is returned. `limit` is rows per page (default 500, at most
+   * 5,000); pass `meta.cursor` back as `cursor` for the next page. End of day:
+   * a session appears the morning after it trades. JSON on either transport.
+   */
+  levels(symbol: string, options: DarkPoolLevelsOptions = {}):
+    Promise<ApiResult<DarkPoolLevelRow[]>> {
+    if (!this.request) throw new TypeError("levels needs a client-built resource");
+    const { query, signal } = splitOptions(options);
+    return get<DarkPoolLevelRow[]>(
+      this.request, `/v2/darkpool/${id(symbol.toUpperCase())}/levels`, query, signal,
+    );
   }
 }
 
@@ -323,11 +345,14 @@ export class FundamentalsResource {
   get(
     symbol: string, dataset: FundamentalsDataset, options: FundamentalsOptions = {},
   ): Promise<ApiResult<JsonValue> | NotModified> {
-    const { timeframe, limit, ifNoneMatch, signal } = options;
+    const { timeframe, limit, vintage, asOf, ifNoneMatch, signal } = options;
+    if (asOf !== undefined && vintage !== "as_reported") {
+      throw new TypeError('asOf needs vintage: "as_reported"');
+    }
     return conditional<JsonValue>(
       this.request,
       `/v2/fundamentals/${id(symbol.toUpperCase())}/${id(dataset)}`,
-      { timeframe, limit },
+      { timeframe, limit, vintage, as_of: asOf },
       ifNoneMatch,
       signal,
     );
@@ -568,6 +593,7 @@ export const SUPPORTED_OPERATIONS = [
   "offexchange_getConcentration",
   "offexchange_getProfile",
   "offexchange_getComposition",
+  "darkpool_getLevels",
   "economy_getRates",
   "flow_getCrossSection",
   "flow_getEod",
@@ -618,6 +644,33 @@ export const SUPPORTED_OPERATIONS = [
   "watchlists_deleteWatchlist",
 ] as const;
 
+// Pinned operations that have no SDK method: the chat, instruments, social and
+// news-board app routes, all app-only (pin 2.20.0).
 export const INTENTIONALLY_UNSUPPORTED_OPERATIONS = [
   "darkpool_getScanner", "darkpool_getDataset", "darkpool_getBreadth",
+  "chat_postChat",
+  "chat_postOutcome",
+  "chat_getStatus",
+  "instruments_list",
+  "instruments_get",
+  "instruments_getBars",
+  "instruments_getQuote",
+  "news_getBoard",
+  "social_shareConfig",
+  "social_getConfig",
+  "social_loadConfig",
+  "social_getFeed",
+  "social_unfollow",
+  "social_follow",
+  "social_publish",
+  "social_deletePost",
+  "social_getPost",
+  "social_getOwnProfile",
+  "social_saveOwnProfile",
+  "social_checkHandle",
+  "social_getProfile",
+  "social_getProfilePosts",
+  "social_getPosts",
+  "social_getPreview",
+  "social_putPreview",
 ] as const;

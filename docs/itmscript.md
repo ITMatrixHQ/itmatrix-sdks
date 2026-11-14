@@ -61,9 +61,8 @@ before the first `run`, bound the loop, and fail on a repeated cursor rather tha
 ascending `ts_ms`.
 
 **Entitlement belongs to the credential, not the method.** `getBars` existing does not
-mean your key may call it. Bars are an app-only route; a key without the entitlement gets
-a 403 `not_entitled_tier` (or `attestation_required` for index symbols), and a symbol
-outside your tier gets one too. Handle `ITMError.code` before you handle the data, and
+mean your key may call it. Bars are public to API keys, but index symbols are
+`403 not_entitled_symbol` for a key, and a symbol outside your tier gets a 403 too. Handle `ITMError.code` before you handle the data, and
 keep whatever provenance the response carried — delayed, stale or partial — attached to
 the result you show. A study drawn from partial data that says nothing about it is the
 most expensive kind of wrong.

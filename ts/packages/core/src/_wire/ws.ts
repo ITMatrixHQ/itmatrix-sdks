@@ -22,6 +22,21 @@ export const protobufPackage = "itmatrixhq.ws.v1";
  *   - strikes are integer thousandths of a dollar (the OSI unit).
  */
 
+export enum GexBookReason {
+  GEX_BOOK_REASON_UNSPECIFIED = 0,
+  /** GEX_BOOK_REASON_SUBSCRIBE - first book after sub */
+  GEX_BOOK_REASON_SUBSCRIBE = 1,
+  /** GEX_BOOK_REASON_PERIODIC - every keyframe_interval_s (membership refresh) */
+  GEX_BOOK_REASON_PERIODIC = 2,
+  /** GEX_BOOK_REASON_RESYNC - client asked {op:"resync"} */
+  GEX_BOOK_REASON_RESYNC = 3,
+  /** GEX_BOOK_REASON_REBUILD - new book_id: session roll, engine restart, member left the grid */
+  GEX_BOOK_REASON_REBUILD = 4,
+  /** GEX_BOOK_REASON_RECOVERY - server skipped updates for this sub (queue pressure) */
+  GEX_BOOK_REASON_RECOVERY = 5,
+  UNRECOGNIZED = -1,
+}
+
 /**
  * One WS data frame. Protobuf sessions subscribe routed, so every frame
  * carries its symbol.
@@ -38,7 +53,17 @@ export interface Frame {
   gexSnap?: GexSnap | undefined;
   gexDelta?: GexDelta | undefined;
   chainSnap?: ChainSnap | undefined;
-  chainDelta?: ChainDelta | undefined;
+  chainDelta?:
+    | ChainDelta
+    | undefined;
+  /** deprecated: never emitted, see GexStrikeBook */
+  gexBook?:
+    | GexBook
+    | undefined;
+  /** deprecated: never emitted, see GexStrikeBookUpdate */
+  gexBookUpdate?: GexBookUpdate | undefined;
+  gexStrikeBook?: GexStrikeBook | undefined;
+  gexStrikeBookUpdate?: GexStrikeBookUpdate | undefined;
 }
 
 export interface Trade {
@@ -130,6 +155,98 @@ export interface ChainRow {
   oi?: number | undefined;
 }
 
+/**
+ * Deprecated (v1 book): kept for field-number history only. The server never
+ * emits it; keyed sessions receive GexStrikeBook. Do not decode it.
+ */
+export interface GexBook {
+  capturedAtMs: bigint;
+  /** server book identity; any change = discard state */
+  bookId: bigint;
+  /** book version this keyframe represents */
+  version: number;
+  spot: number;
+  /** whole-chain total, not the sum of listed strikes */
+  netGex: number;
+  /** dollars; absent when not computable */
+  flipPoint?:
+    | number
+    | undefined;
+  /** packed; [0] absolute thousandths, [i>0] = strike[i]-strike[i-1]; ascending */
+  strikes: bigint[];
+  /** packed; per-$1-move dollars, aligned with strikes */
+  gex: number[];
+  /** packed; aligned, or empty when unavailable */
+  callOi: number[];
+  /** packed; aligned, or empty when unavailable */
+  putOi: number[];
+  /** CRC-32 (IEEE, zlib) of the book, see below */
+  crc: number;
+  reason: GexBookReason;
+}
+
+/** Deprecated (v1 book): never emitted; see GexStrikeBookUpdate. */
+export interface GexBookUpdate {
+  capturedAtMs: bigint;
+  bookId: bigint;
+  version: number;
+  spot: number;
+  netGex: number;
+  flipPoint?:
+    | number
+    | undefined;
+  /** packed; positions into the keyframe's strike list, ascending */
+  index: number[];
+  /** packed; new values aligned with index */
+  gex: number[];
+  /** CRC of the book after applying */
+  crc: number;
+}
+
+/** Keyframe. Replaces all client state for the symbol. */
+export interface GexStrikeBook {
+  capturedAtMs: bigint;
+  /** server book identity; any change = discard state */
+  bookId: bigint;
+  /** book version this keyframe represents */
+  version: number;
+  spot: number;
+  /** whole-chain total, not the sum of listed strikes */
+  netGex: number;
+  /** dollars; absent when not computable */
+  flipPoint?:
+    | number
+    | undefined;
+  /** packed; [0] absolute thousandths, [i>0] delta; ascending */
+  strikes: bigint[];
+  /** packed; per-$1-move dollars, >= 0, aligned with strikes */
+  callGex: number[];
+  /** packed; per-$1-move dollars, <= 0, aligned with strikes */
+  putGex: number[];
+  /** CRC-32 (IEEE, zlib) of the book, see below */
+  crc: number;
+  reason: GexBookReason;
+}
+
+/** Update. Applies only to book_id at version-1. Membership is fixed between keyframes. */
+export interface GexStrikeBookUpdate {
+  capturedAtMs: bigint;
+  bookId: bigint;
+  version: number;
+  spot: number;
+  netGex: number;
+  flipPoint?:
+    | number
+    | undefined;
+  /** packed; positions into the keyframe's strikes, ascending */
+  index: number[];
+  /** packed; new values aligned with index (both sides always sent) */
+  callGex: number[];
+  putGex: number[];
+  /** CRC of the book after applying */
+  crc: number;
+}
+
 function createBaseFrame(): Frame {
   return {
     symbol: "",
@@ -144,6 +261,10 @@ function createBaseFrame(): Frame {
     gexDelta: undefined,
     chainSnap: undefined,
     chainDelta: undefined,
+    gexBook: undefined,
+    gexBookUpdate: undefined,
+    gexStrikeBook: undefined,
+    gexStrikeBookUpdate: undefined,
   };
 }
 
@@ -184,6 +305,18 @@ export const Frame: MessageFns<Frame> = {
     }
     if (message.chainDelta !== undefined) {
       ChainDelta.encode(message.chainDelta, writer.uint32(162).fork()).join();
+    }
+    if (message.gexBook !== undefined) {
+      GexBook.encode(message.gexBook, writer.uint32(170).fork()).join();
+    }
+    if (message.gexBookUpdate !== undefined) {
+      GexBookUpdate.encode(message.gexBookUpdate, writer.uint32(178).fork()).join();
+    }
+    if (message.gexStrikeBook !== undefined) {
+      GexStrikeBook.encode(message.gexStrikeBook, writer.uint32(186).fork()).join();
+    }
+    if (message.gexStrikeBookUpdate !== undefined) {
+      GexStrikeBookUpdate.encode(message.gexStrikeBookUpdate, writer.uint32(194).fork()).join();
     }
     return writer;
   },
@@ -297,6 +430,38 @@ export const Frame: MessageFns<Frame> = {
             message.chainDelta = ChainDelta.decode(reader, reader.uint32());
             continue;
           }
+          case 21: {
+            if (tag !== 170) {
+              break;
+            }
+
+            message.gexBook = GexBook.decode(reader, reader.uint32());
+            continue;
+          }
+          case 22: {
+            if (tag !== 178) {
+              break;
+            }
+
+            message.gexBookUpdate = GexBookUpdate.decode(reader, reader.uint32());
+            continue;
+          }
+          case 23: {
+            if (tag !== 186) {
+              break;
+            }
+
+            message.gexStrikeBook = GexStrikeBook.decode(reader, reader.uint32());
+            continue;
+          }
+          case 24: {
+            if (tag !== 194) {
+              break;
+            }
+
+            message.gexStrikeBookUpdate = GexStrikeBookUpdate.decode(reader, reader.uint32());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -339,6 +504,18 @@ export const Frame: MessageFns<Frame> = {
       : undefined;
     message.chainDelta = (object.chainDelta !== undefined && object.chainDelta !== null)
       ? ChainDelta.fromPartial(object.chainDelta)
+      : undefined;
+    message.gexBook = (object.gexBook !== undefined && object.gexBook !== null)
+      ? GexBook.fromPartial(object.gexBook)
+      : undefined;
+    message.gexBookUpdate = (object.gexBookUpdate !== undefined && object.gexBookUpdate !== null)
+      ? GexBookUpdate.fromPartial(object.gexBookUpdate)
+      : undefined;
+    message.gexStrikeBook = (object.gexStrikeBook !== undefined && object.gexStrikeBook !== null)
+      ? GexStrikeBook.fromPartial(object.gexStrikeBook)
+      : undefined;
+    message.gexStrikeBookUpdate = (object.gexStrikeBookUpdate !== undefined && object.gexStrikeBookUpdate !== null)
+      ? GexStrikeBookUpdate.fromPartial(object.gexStrikeBookUpdate)
       : undefined;
     return message;
   },
@@ -1558,6 +1735,910 @@ export const ChainRow: MessageFns<ChainRow> = {
     message.ask = object.ask ?? undefined;
     message.iv = object.iv ?? undefined;
     message.oi = object.oi ?? undefined;
+    return message;
+  },
+};
+
+function createBaseGexBook(): GexBook {
+  return {
+    capturedAtMs: 0n,
+    bookId: 0n,
+    version: 0,
+    spot: 0,
+    netGex: 0,
+    flipPoint: undefined,
+    strikes: [],
+    gex: [],
+    callOi: [],
+    putOi: [],
+    crc: 0,
+    reason: 0,
+  };
+}
+
+export const GexBook: MessageFns<GexBook> = {
+  encode(message: GexBook, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.capturedAtMs !== 0n) {
+      if (BigInt.asUintN(64, message.capturedAtMs) !== message.capturedAtMs) {
+        throw new globalThis.Error("value provided for field message.capturedAtMs of type uint64 too large");
+      }
+      writer.uint32(8).uint64(message.capturedAtMs);
+    }
+    if (message.bookId !== 0n) {
+      if (BigInt.asUintN(64, message.bookId) !== message.bookId) {
+        throw new globalThis.Error("value provided for field message.bookId of type fixed64 too large");
+      }
+      writer.uint32(17).fixed64(message.bookId);
+    }
+    if (message.version !== 0) {
+      writer.uint32(24).uint32(message.version);
+    }
+    if (message.spot !== 0) {
+      writer.uint32(33).double(message.spot);
+    }
+    if (message.netGex !== 0) {
+      writer.uint32(41).double(message.netGex);
+    }
+    if (message.flipPoint !== undefined) {
+      writer.uint32(49).double(message.flipPoint);
+    }
+    writer.uint32(58).fork();
+    for (const v of message.strikes) {
+      if (BigInt.asIntN(64, v) !== v) {
+        throw new globalThis.Error("a value provided in array field strikes of type sint64 is too large");
+      }
+      writer.sint64(v);
+    }
+    writer.join();
+    writer.uint32(66).fork();
+    for (const v of message.gex) {
+      writer.float(v);
+    }
+    writer.join();
+    writer.uint32(74).fork();
+    for (const v of message.callOi) {
+      writer.uint32(v);
+    }
+    writer.join();
+    writer.uint32(82).fork();
+    for (const v of message.putOi) {
+      writer.uint32(v);
+    }
+    writer.join();
+    if (message.crc !== 0) {
+      writer.uint32(93).fixed32(message.crc);
+    }
+    if (message.reason !== 0) {
+      writer.uint32(96).int32(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GexBook {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGexBook();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.capturedAtMs = reader.uint64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.bookId = reader.fixed64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.version = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.spot = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.netGex = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.flipPoint = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag === 56) {
+              message.strikes.push(reader.sint64() as bigint);
+
+              continue;
+            }
+
+            if (tag === 58) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.strikes.push(reader.sint64() as bigint);
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 8: {
+            if (tag === 69) {
+              message.gex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 66) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.gex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 9: {
+            if (tag === 72) {
+              message.callOi.push(reader.uint32());
+
+              continue;
+            }
+
+            if (tag === 74) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.callOi.push(reader.uint32());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 10: {
+            if (tag === 80) {
+              message.putOi.push(reader.uint32());
+
+              continue;
+            }
+
+            if (tag === 82) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.putOi.push(reader.uint32());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 11: {
+            if (tag !== 93) {
+              break;
+            }
+
+            message.crc = reader.fixed32();
+            continue;
+          }
+          case 12: {
+            if (tag !== 96) {
+              break;
+            }
+
+            message.reason = reader.int32() as any;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create(base?: DeepPartial<GexBook>): GexBook {
+    return GexBook.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GexBook>): GexBook {
+    const message = createBaseGexBook();
+    message.capturedAtMs = (object.capturedAtMs !== undefined && object.capturedAtMs !== null)
+      ? BigInt(object.capturedAtMs)
+      : 0n;
+    message.bookId = (object.bookId !== undefined && object.bookId !== null) ? BigInt(object.bookId) : 0n;
+    message.version = object.version ?? 0;
+    message.spot = object.spot ?? 0;
+    message.netGex = object.netGex ?? 0;
+    message.flipPoint = object.flipPoint ?? undefined;
+    message.strikes = object.strikes?.map((e) => BigInt(e)) || [];
+    message.gex = object.gex?.map((e) => e) || [];
+    message.callOi = object.callOi?.map((e) => e) || [];
+    message.putOi = object.putOi?.map((e) => e) || [];
+    message.crc = object.crc ?? 0;
+    message.reason = object.reason ?? 0;
+    return message;
+  },
+};
+
+function createBaseGexBookUpdate(): GexBookUpdate {
+  return {
+    capturedAtMs: 0n,
+    bookId: 0n,
+    version: 0,
+    spot: 0,
+    netGex: 0,
+    flipPoint: undefined,
+    index: [],
+    gex: [],
+    crc: 0,
+  };
+}
+
+export const GexBookUpdate: MessageFns<GexBookUpdate> = {
+  encode(message: GexBookUpdate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.capturedAtMs !== 0n) {
+      if (BigInt.asUintN(64, message.capturedAtMs) !== message.capturedAtMs) {
+        throw new globalThis.Error("value provided for field message.capturedAtMs of type uint64 too large");
+      }
+      writer.uint32(8).uint64(message.capturedAtMs);
+    }
+    if (message.bookId !== 0n) {
+      if (BigInt.asUintN(64, message.bookId) !== message.bookId) {
+        throw new globalThis.Error("value provided for field message.bookId of type fixed64 too large");
+      }
+      writer.uint32(17).fixed64(message.bookId);
+    }
+    if (message.version !== 0) {
+      writer.uint32(24).uint32(message.version);
+    }
+    if (message.spot !== 0) {
+      writer.uint32(33).double(message.spot);
+    }
+    if (message.netGex !== 0) {
+      writer.uint32(41).double(message.netGex);
+    }
+    if (message.flipPoint !== undefined) {
+      writer.uint32(49).double(message.flipPoint);
+    }
+    writer.uint32(58).fork();
+    for (const v of message.index) {
+      writer.uint32(v);
+    }
+    writer.join();
+    writer.uint32(66).fork();
+    for (const v of message.gex) {
+      writer.float(v);
+    }
+    writer.join();
+    if (message.crc !== 0) {
+      writer.uint32(77).fixed32(message.crc);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GexBookUpdate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGexBookUpdate();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.capturedAtMs = reader.uint64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.bookId = reader.fixed64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.version = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.spot = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.netGex = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.flipPoint = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag === 56) {
+              message.index.push(reader.uint32());
+
+              continue;
+            }
+
+            if (tag === 58) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.index.push(reader.uint32());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 8: {
+            if (tag === 69) {
+              message.gex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 66) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.gex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 9: {
+            if (tag !== 77) {
+              break;
+            }
+
+            message.crc = reader.fixed32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create(base?: DeepPartial<GexBookUpdate>): GexBookUpdate {
+    return GexBookUpdate.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GexBookUpdate>): GexBookUpdate {
+    const message = createBaseGexBookUpdate();
+    message.capturedAtMs = (object.capturedAtMs !== undefined && object.capturedAtMs !== null)
+      ? BigInt(object.capturedAtMs)
+      : 0n;
+    message.bookId = (object.bookId !== undefined && object.bookId !== null) ? BigInt(object.bookId) : 0n;
+    message.version = object.version ?? 0;
+    message.spot = object.spot ?? 0;
+    message.netGex = object.netGex ?? 0;
+    message.flipPoint = object.flipPoint ?? undefined;
+    message.index = object.index?.map((e) => e) || [];
+    message.gex = object.gex?.map((e) => e) || [];
+    message.crc = object.crc ?? 0;
+    return message;
+  },
+};
+
+function createBaseGexStrikeBook(): GexStrikeBook {
+  return {
+    capturedAtMs: 0n,
+    bookId: 0n,
+    version: 0,
+    spot: 0,
+    netGex: 0,
+    flipPoint: undefined,
+    strikes: [],
+    callGex: [],
+    putGex: [],
+    crc: 0,
+    reason: 0,
+  };
+}
+
+export const GexStrikeBook: MessageFns<GexStrikeBook> = {
+  encode(message: GexStrikeBook, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.capturedAtMs !== 0n) {
+      if (BigInt.asUintN(64, message.capturedAtMs) !== message.capturedAtMs) {
+        throw new globalThis.Error("value provided for field message.capturedAtMs of type uint64 too large");
+      }
+      writer.uint32(8).uint64(message.capturedAtMs);
+    }
+    if (message.bookId !== 0n) {
+      if (BigInt.asUintN(64, message.bookId) !== message.bookId) {
+        throw new globalThis.Error("value provided for field message.bookId of type fixed64 too large");
+      }
+      writer.uint32(17).fixed64(message.bookId);
+    }
+    if (message.version !== 0) {
+      writer.uint32(24).uint32(message.version);
+    }
+    if (message.spot !== 0) {
+      writer.uint32(33).double(message.spot);
+    }
+    if (message.netGex !== 0) {
+      writer.uint32(41).double(message.netGex);
+    }
+    if (message.flipPoint !== undefined) {
+      writer.uint32(49).double(message.flipPoint);
+    }
+    writer.uint32(58).fork();
+    for (const v of message.strikes) {
+      if (BigInt.asIntN(64, v) !== v) {
+        throw new globalThis.Error("a value provided in array field strikes of type sint64 is too large");
+      }
+      writer.sint64(v);
+    }
+    writer.join();
+    writer.uint32(66).fork();
+    for (const v of message.callGex) {
+      writer.float(v);
+    }
+    writer.join();
+    writer.uint32(74).fork();
+    for (const v of message.putGex) {
+      writer.float(v);
+    }
+    writer.join();
+    if (message.crc !== 0) {
+      writer.uint32(85).fixed32(message.crc);
+    }
+    if (message.reason !== 0) {
+      writer.uint32(88).int32(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GexStrikeBook {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGexStrikeBook();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.capturedAtMs = reader.uint64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.bookId = reader.fixed64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.version = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.spot = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.netGex = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.flipPoint = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag === 56) {
+              message.strikes.push(reader.sint64() as bigint);
+
+              continue;
+            }
+
+            if (tag === 58) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.strikes.push(reader.sint64() as bigint);
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 8: {
+            if (tag === 69) {
+              message.callGex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 66) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.callGex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 9: {
+            if (tag === 77) {
+              message.putGex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 74) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.putGex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 10: {
+            if (tag !== 85) {
+              break;
+            }
+
+            message.crc = reader.fixed32();
+            continue;
+          }
+          case 11: {
+            if (tag !== 88) {
+              break;
+            }
+
+            message.reason = reader.int32() as any;
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create(base?: DeepPartial<GexStrikeBook>): GexStrikeBook {
+    return GexStrikeBook.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GexStrikeBook>): GexStrikeBook {
+    const message = createBaseGexStrikeBook();
+    message.capturedAtMs = (object.capturedAtMs !== undefined && object.capturedAtMs !== null)
+      ? BigInt(object.capturedAtMs)
+      : 0n;
+    message.bookId = (object.bookId !== undefined && object.bookId !== null) ? BigInt(object.bookId) : 0n;
+    message.version = object.version ?? 0;
+    message.spot = object.spot ?? 0;
+    message.netGex = object.netGex ?? 0;
+    message.flipPoint = object.flipPoint ?? undefined;
+    message.strikes = object.strikes?.map((e) => BigInt(e)) || [];
+    message.callGex = object.callGex?.map((e) => e) || [];
+    message.putGex = object.putGex?.map((e) => e) || [];
+    message.crc = object.crc ?? 0;
+    message.reason = object.reason ?? 0;
+    return message;
+  },
+};
+
+function createBaseGexStrikeBookUpdate(): GexStrikeBookUpdate {
+  return {
+    capturedAtMs: 0n,
+    bookId: 0n,
+    version: 0,
+    spot: 0,
+    netGex: 0,
+    flipPoint: undefined,
+    index: [],
+    callGex: [],
+    putGex: [],
+    crc: 0,
+  };
+}
+
+export const GexStrikeBookUpdate: MessageFns<GexStrikeBookUpdate> = {
+  encode(message: GexStrikeBookUpdate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.capturedAtMs !== 0n) {
+      if (BigInt.asUintN(64, message.capturedAtMs) !== message.capturedAtMs) {
+        throw new globalThis.Error("value provided for field message.capturedAtMs of type uint64 too large");
+      }
+      writer.uint32(8).uint64(message.capturedAtMs);
+    }
+    if (message.bookId !== 0n) {
+      if (BigInt.asUintN(64, message.bookId) !== message.bookId) {
+        throw new globalThis.Error("value provided for field message.bookId of type fixed64 too large");
+      }
+      writer.uint32(17).fixed64(message.bookId);
+    }
+    if (message.version !== 0) {
+      writer.uint32(24).uint32(message.version);
+    }
+    if (message.spot !== 0) {
+      writer.uint32(33).double(message.spot);
+    }
+    if (message.netGex !== 0) {
+      writer.uint32(41).double(message.netGex);
+    }
+    if (message.flipPoint !== undefined) {
+      writer.uint32(49).double(message.flipPoint);
+    }
+    writer.uint32(58).fork();
+    for (const v of message.index) {
+      writer.uint32(v);
+    }
+    writer.join();
+    writer.uint32(66).fork();
+    for (const v of message.callGex) {
+      writer.float(v);
+    }
+    writer.join();
+    writer.uint32(74).fork();
+    for (const v of message.putGex) {
+      writer.float(v);
+    }
+    writer.join();
+    if (message.crc !== 0) {
+      writer.uint32(85).fixed32(message.crc);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GexStrikeBookUpdate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGexStrikeBookUpdate();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.capturedAtMs = reader.uint64() as bigint;
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.bookId = reader.fixed64() as bigint;
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.version = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 33) {
+              break;
+            }
+
+            message.spot = reader.double();
+            continue;
+          }
+          case 5: {
+            if (tag !== 41) {
+              break;
+            }
+
+            message.netGex = reader.double();
+            continue;
+          }
+          case 6: {
+            if (tag !== 49) {
+              break;
+            }
+
+            message.flipPoint = reader.double();
+            continue;
+          }
+          case 7: {
+            if (tag === 56) {
+              message.index.push(reader.uint32());
+
+              continue;
+            }
+
+            if (tag === 58) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.index.push(reader.uint32());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 8: {
+            if (tag === 69) {
+              message.callGex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 66) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.callGex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 9: {
+            if (tag === 77) {
+              message.putGex.push(reader.float());
+
+              continue;
+            }
+
+            if (tag === 74) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.putGex.push(reader.float());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+          case 10: {
+            if (tag !== 85) {
+              break;
+            }
+
+            message.crc = reader.fixed32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  create(base?: DeepPartial<GexStrikeBookUpdate>): GexStrikeBookUpdate {
+    return GexStrikeBookUpdate.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GexStrikeBookUpdate>): GexStrikeBookUpdate {
+    const message = createBaseGexStrikeBookUpdate();
+    message.capturedAtMs = (object.capturedAtMs !== undefined && object.capturedAtMs !== null)
+      ? BigInt(object.capturedAtMs)
+      : 0n;
+    message.bookId = (object.bookId !== undefined && object.bookId !== null) ? BigInt(object.bookId) : 0n;
+    message.version = object.version ?? 0;
+    message.spot = object.spot ?? 0;
+    message.netGex = object.netGex ?? 0;
+    message.flipPoint = object.flipPoint ?? undefined;
+    message.index = object.index?.map((e) => e) || [];
+    message.callGex = object.callGex?.map((e) => e) || [];
+    message.putGex = object.putGex?.map((e) => e) || [];
+    message.crc = object.crc ?? 0;
     return message;
   },
 };

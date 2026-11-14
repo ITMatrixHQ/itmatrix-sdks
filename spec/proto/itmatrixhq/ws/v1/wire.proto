@@ -28,6 +28,10 @@ message Frame {
     GexDelta gex_delta = 18;
     ChainSnap chain_snap = 19;
     ChainDelta chain_delta = 20;
+    GexBook gex_book = 21;                      // deprecated: never emitted, see GexStrikeBook
+    GexBookUpdate gex_book_update = 22;         // deprecated: never emitted, see GexStrikeBookUpdate
+    GexStrikeBook gex_strike_book = 23;
+    GexStrikeBookUpdate gex_strike_book_update = 24;
   }
 }
 
@@ -118,3 +122,85 @@ message ChainRow {
   optional double iv = 6;
   optional int32 oi = 7;
 }
+
+enum GexBookReason {
+  GEX_BOOK_REASON_UNSPECIFIED = 0;
+  GEX_BOOK_REASON_SUBSCRIBE = 1;   // first book after sub
+  GEX_BOOK_REASON_PERIODIC = 2;    // every keyframe_interval_s (membership refresh)
+  GEX_BOOK_REASON_RESYNC = 3;      // client asked {op:"resync"}
+  GEX_BOOK_REASON_REBUILD = 4;     // new book_id: session roll, engine restart, member left the grid
+  GEX_BOOK_REASON_RECOVERY = 5;    // server skipped updates for this sub (queue pressure)
+}
+
+// Deprecated (v1 book): kept for field-number history only. The server never
+// emits it; keyed sessions receive GexStrikeBook. Do not decode it.
+message GexBook {
+  uint64 captured_at_ms = 1;
+  fixed64 book_id = 2;            // server book identity; any change = discard state
+  uint32 version = 3;             // book version this keyframe represents
+  double spot = 4;
+  double net_gex = 5;             // whole-chain total, not the sum of listed strikes
+  optional double flip_point = 6; // dollars; absent when not computable
+  repeated sint64 strikes = 7;    // packed; [0] absolute thousandths, [i>0] = strike[i]-strike[i-1]; ascending
+  repeated float gex = 8;         // packed; per-$1-move dollars, aligned with strikes
+  repeated uint32 call_oi = 9;    // packed; aligned, or empty when unavailable
+  repeated uint32 put_oi = 10;    // packed; aligned, or empty when unavailable
+  fixed32 crc = 11;               // CRC-32 (IEEE, zlib) of the book, see below
+  GexBookReason reason = 12;
+}
+
+// Deprecated (v1 book): never emitted; see GexStrikeBookUpdate.
+message GexBookUpdate {
+  uint64 captured_at_ms = 1;
+  fixed64 book_id = 2;
+  uint32 version = 3;
+  double spot = 4;
+  double net_gex = 5;
+  optional double flip_point = 6;
+  repeated uint32 index = 7;      // packed; positions into the keyframe's strike list, ascending
+  repeated float gex = 8;         // packed; new values aligned with index
+  fixed32 crc = 9;                // CRC of the book after applying
+}
+
+// v1 CRC (deprecated GexBook.crc and GexBookUpdate.crc): CRC-32/IEEE over each
+// strike in ascending order as strike thousandths int64 LE, then the gex
+// float32 bits LE.
+
+// Keyframe. Replaces all client state for the symbol.
+message GexStrikeBook {
+  uint64 captured_at_ms = 1;
+  fixed64 book_id = 2;             // server book identity; any change = discard state
+  uint32 version = 3;              // book version this keyframe represents
+  double spot = 4;
+  double net_gex = 5;              // whole-chain total, not the sum of listed strikes
+  optional double flip_point = 6;  // dollars; absent when not computable
+  repeated sint64 strikes = 7;     // packed; [0] absolute thousandths, [i>0] delta; ascending
+  repeated float call_gex = 8;     // packed; per-$1-move dollars, >= 0, aligned with strikes
+  repeated float put_gex = 9;      // packed; per-$1-move dollars, <= 0, aligned with strikes
+  fixed32 crc = 10;                // CRC-32 (IEEE, zlib) of the book, see below
+  GexBookReason reason = 11;
+}
+
+// Update. Applies only to book_id at version-1. Membership is fixed between keyframes.
+message GexStrikeBookUpdate {
+  uint64 captured_at_ms = 1;
+  fixed64 book_id = 2;
+  uint32 version = 3;
+  double spot = 4;
+  double net_gex = 5;
+  optional double flip_point = 6;
+  repeated uint32 index = 7;       // packed; positions into the keyframe's strikes, ascending
+  repeated float call_gex = 8;     // packed; new values aligned with index (both sides always sent)
+  repeated float put_gex = 9;
+  fixed32 crc = 10;                // CRC of the book after applying
+}
+
+// The book: the top strikes by gross |call_gex| + |put_gex|, fixed between
+// keyframes. Total GEX per strike is not sent; it is call_gex + put_gex
+// (computed in float64). Calls are positive, puts negative, as in REST.
+//
+// CRC definition (GexStrikeBook.crc and GexStrikeBookUpdate.crc): CRC-32/IEEE,
+// the same value zlib crc32 returns, over the book's strikes in ascending
+// order. Each strike contributes its strike in thousandths as a little-endian
+// int64, then its call_gex as the little-endian bits of the float32, then its
+// put_gex the same way.
