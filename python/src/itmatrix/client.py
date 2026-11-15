@@ -34,14 +34,13 @@ from ._core.models import (
     Transport,
 )
 from .analytics import GexAnalysis, analyze_gex
-from .models import Bars, GexGrid, OptionChain, Replay, Symbol, SymbolIdentity, mapped
+from .models import Bars, GexGrid, OptionChain, Symbol, SymbolIdentity, mapped
 from .options import (
     BarsOptions,
     ChainOptions,
     GexHistoryOptions,
     GexOptions,
     GexReferenceOptions,
-    ReplayOptions,
 )
 from .periods import BarPeriod, resolve_bar_window, validate_bar_window
 
@@ -57,8 +56,7 @@ class AsyncITMClient(_TransportClient):
     finalizer, so close it explicitly.
 
     ``stream.gex("SPY", nearest=20)`` opens a live GEX book and needs an ``itm_``
-    API key. Such a client connects with the keyed stream protocol. Any other
-    credential keeps protocol 3.
+    API key. Only a key can stream.
     """
 
     @wraps(_TransportClient.__init__)
@@ -103,7 +101,7 @@ class AsyncITMClient(_TransportClient):
     async def get_gex_history(
         self, symbol: str, **options: Unpack[GexHistoryOptions]
     ) -> Result[GexHistoryData]:
-        """Get a whole session's GEX captures — the replay day-bundle.
+        """Get a whole session's GEX captures, one per capture time.
 
         ``date`` is required. JSON only: unlike the grid this route has no
         protobuf body, and the response is large enough that ``top`` is usually
@@ -196,17 +194,6 @@ class AsyncITMClient(_TransportClient):
                 options[key] = value
         return await self.get_bars(symbol, **options)
 
-    async def get_replay(
-        self, symbol: str, **options: Unpack[ReplayOptions]
-    ) -> Result[Replay]:
-        """Replay a session (date is required) as typed ticks or dollar bars."""
-        result = mapped(await super().replay(symbol, **options), Replay.decode)
-        if result.data is not None and result.data.session is None:
-            result = replace(
-                result, data=replace(result.data, session=options.get("date"))
-            )
-        return result
-
     async def list_expirations(
         self, symbol: str, **options: Unpack[ChainOptions]
     ) -> Result[list[str]]:
@@ -233,7 +220,6 @@ class AsyncITMClient(_TransportClient):
     gex = get_gex
     chain = get_option_chain
     bars = get_bars
-    replay = get_replay
     expirations = list_expirations
 
 
@@ -582,16 +568,9 @@ class ITMClient:
         """Make an authenticated request to a relative /v2/ path."""
         return self._call(self._runtime.client.request, path, **options)
 
-    def get_replay(
-        self, symbol: str, **options: Unpack[ReplayOptions]
-    ) -> Result[Replay]:
-        """Replay a session (date is required) as typed ticks or dollar bars."""
-        return self._call(self._runtime.client.get_replay, symbol, **options)
-
     gex = get_gex
     chain = get_option_chain
     bars = get_bars
-    replay = get_replay
     expirations = list_expirations
 
 

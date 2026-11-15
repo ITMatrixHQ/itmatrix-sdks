@@ -9,7 +9,7 @@ import { ITMClient } from "@itmatrixhq/core";
 
 const client = new ITMClient({ apiKey: process.env.ITM_API_KEY });
 const { data: grid, meta } = await client.getGex("SPY", { top: 10 });
-console.log(grid.net_gex, grid.strikes[0]?.gex, meta.plane);
+console.log(grid.net_gex, grid.strikes[0]?.gex, meta.cursor);
 const { data: identity } = await client.lookupSymbol("SPY");
 ```
 
@@ -18,10 +18,9 @@ requests, so an unused client is simply garbage. Call `client.close()` after usi
 `client.stream`, to end its subscriptions, socket and reconnect timer; it is
 idempotent, and later calls on that client reject with a clear error.
 
-Node 22+ and modern browsers are supported. Keep API keys on your server. Browser
-applications can supply `token: async () => freshToken` for their authenticated session.
+Node 22+ and modern browsers are supported. Keep API keys on your server.
 
-`getGex`, `getOptionChain`, `getBars`, and `getReplay` return typed domain models
+`getGex`, `getOptionChain` and `getBars` return typed domain models
 with the same shape under JSON (default) and `transport: "protobuf"`. Prices are
 dollars, timestamps are epoch milliseconds, dates are ISO calendar dates, and
 strikes/strike filters are **integer thousandths** (`600_000` means $600).
@@ -45,16 +44,14 @@ for (const row of chain.data.rows) {
 }
 ```
 
-Server entitlements still apply. Replay and several grouped resources, such as live
-flow prints and UOA, are app-only. Supplying an API key does not make those routes
-public. Bars and option chains are public to API keys. Flow and off-exchange reads
+Server entitlements still apply. Bars and option chains are public to API keys. Flow and off-exchange reads
 also need a non-professional classification on the account. Without it a key gets
 `403 attestation_required`. Index symbols are `403 not_entitled_symbol` for keys.
 `listSymbols`, `getSymbol`, and `lookupSymbol` expose registry and identity models.
-Grouped resources cover account, offexchange, economy, flow, fundamentals/news,
-journal, market, reference, screener, vol, watchlists, protocol discovery and
-service info. Together with the client's own methods they model **every
-non-internal `/v2` operation the contract declares** — the pre-`/v2` aliases are
+Grouped resources cover account, offexchange, economy, flow, fundamentals,
+journal, market, reference, screener, vol, watchlists, protocol schemas and
+service info. Together with the client's own methods they model **every public
+`/v2` operation the contract declares** — the pre-`/v2` aliases are
 deliberately not modelled.
 
 `client.offexchange` exposes `activity`, `concentration`, `profile`, and
@@ -70,11 +67,6 @@ const day = await client.getGexHistory("SPY", { date: "2026-09-04", from: "09:25
 // Exact immutable book; captured_at=null means unavailable, not zero.
 const reference = await client.getGexReference("SPY", {
   date: "2026-09-25", basis: "prev_close",
-});
-
-// First-party app session only: Basic or higher plus CBOE attestation, explicitly partial.
-const premium = await client.flow.premium("SPY", {
-  sessions: 2, dte: "zero", minPremiumUsd: 100_000,
 });
 
 // Our own implied vol, out of the greeks engine.
@@ -135,7 +127,7 @@ GET retries default to two for 429/502/503/504, with each delay capped at 30 sec
 Writes are never automatically retried. `ITMError` includes the HTTP status,
 server code, message, request ID, and retry hint.
 
-`gex`, `chain`, `bars`, and `replay` are legacy wire-level methods: with protobuf
+`gex`, `chain` and `bars` are legacy wire-level methods: with protobuf
 they return generated wire objects, including bigint fields. Prefer the `get…`
 methods for domain models. Domain conversion rejects protobuf integers beyond
 JavaScript's safe integer range instead of rounding; advanced users can access
@@ -202,7 +194,6 @@ or `"put"`). They choose among the book's 120 strikes, so `nearest: 20` can have
 The SDK keeps the book correct. It checks a CRC on every frame, asks for a fresh
 keyframe on any gap, backs off with jitter and resubscribes after a reconnect. A
 refusal it cannot retry is an `error` with `terminal` set, then the book closes.
-Signed-in sessions keep raw frames through `stream.subscribe("gex", { symbol })`.
 Recipes (flip alerts, many symbols, web handlers, reconnects, async I/O) are in the
 [streaming guide](../../../docs/streaming.md#recipes). See also `examples/gex-stream.ts`.
 

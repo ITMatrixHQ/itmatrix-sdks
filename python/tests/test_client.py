@@ -22,7 +22,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
                         "max_abs_gex": 9,
                         "strikes": [],
                     },
-                    "meta": {"plane": "public"},
+                    "meta": {"cursor": None},
                 },
                 headers={"x-request-id": "req-json"},
             )
@@ -33,7 +33,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         result = await client.gex("SPY", top=5)
 
         self.assertEqual(result.data["spot"], 600)
-        self.assertEqual(result.meta["plane"], "public")
+        self.assertIsNone(result.meta["cursor"])
         self.assertEqual(result.request_id, "req-json")
 
     async def test_protobuf_negotiation_preserves_uint64(self) -> None:
@@ -47,7 +47,6 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
                 content=wire.SerializeToString(),
                 headers={
                     "content-type": "application/x-protobuf",
-                    "x-itm-plane": "public",
                     "x-itm-caps": '["bars"]',
                 },
             )

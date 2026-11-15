@@ -10,11 +10,10 @@ import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 export const protobufPackage = "itmatrixhq.rest.v1";
 
 /**
- * itmatrixhq.rest.v1 — PUBLIC protobuf bodies for negotiated REST responses.
+ * itmatrixhq.rest.v1: protobuf bodies for ITMatrixHQ REST responses.
  *
- * External SDKs request these with Accept: application/x-protobuf on the
- * high-volume reads (bars / replay / gex grid / chain); JSON remains the
- * default. Errors stay JSON on every transport. Field conventions: scaled
+ * Request one with Accept: application/x-protobuf on the routes that offer it.
+ * JSON stays the default and errors are always JSON. Field conventions: scaled
  * sint32 prices (PRICE_SCALE = 10000), epoch-ms timestamps, absent = unset
  * (proto3 optional), strikes in thousandths.
  */
@@ -37,25 +36,6 @@ export interface Bar {
   v?: number | undefined;
   vwap?: number | undefined;
   n?: number | undefined;
-}
-
-export interface ReplayResponse {
-  priceScale: number;
-  /** 0 = ticks, 1 = bars1m */
-  fidelity: number;
-  complete: boolean;
-  /** tick source names (fidelity = ticks) */
-  sources: string[];
-  ticks: Tick[];
-  bars: Bar[];
-}
-
-export interface Tick {
-  tsMs: bigint;
-  priceScaled: number;
-  sourceId: number;
-  /** Monotonic per-symbol sequence (u64 — must not truncate). */
-  seq: bigint;
 }
 
 /**
@@ -115,11 +95,7 @@ export interface ChainRow {
   sharesPerContract: number;
 }
 
-/**
- * Synthetic aggregates derived from ITMatrixHQ's locally captured
- * off-exchange feed. These messages intentionally have no raw-print identity,
- * venue/TRF, condition, or vendor-source fields.
- */
+/** Off-exchange aggregates computed by ITMatrixHQ. */
 export interface OffExchangeActivityResponse {
   rows: OffExchangeActivityRow[];
 }
@@ -426,218 +402,6 @@ export const Bar: MessageFns<Bar> = {
     message.v = object.v ?? undefined;
     message.vwap = object.vwap ?? undefined;
     message.n = object.n ?? undefined;
-    return message;
-  },
-};
-
-function createBaseReplayResponse(): ReplayResponse {
-  return { priceScale: 0, fidelity: 0, complete: false, sources: [], ticks: [], bars: [] };
-}
-
-export const ReplayResponse: MessageFns<ReplayResponse> = {
-  encode(message: ReplayResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.priceScale !== 0) {
-      writer.uint32(8).uint32(message.priceScale);
-    }
-    if (message.fidelity !== 0) {
-      writer.uint32(16).uint32(message.fidelity);
-    }
-    if (message.complete !== false) {
-      writer.uint32(24).bool(message.complete);
-    }
-    for (const v of message.sources) {
-      writer.uint32(34).string(v!);
-    }
-    for (const v of message.ticks) {
-      Tick.encode(v!, writer.uint32(42).fork()).join();
-    }
-    for (const v of message.bars) {
-      Bar.encode(v!, writer.uint32(50).fork()).join();
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): ReplayResponse {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseReplayResponse();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.priceScale = reader.uint32();
-            continue;
-          }
-          case 2: {
-            if (tag !== 16) {
-              break;
-            }
-
-            message.fidelity = reader.uint32();
-            continue;
-          }
-          case 3: {
-            if (tag !== 24) {
-              break;
-            }
-
-            message.complete = reader.bool();
-            continue;
-          }
-          case 4: {
-            if (tag !== 34) {
-              break;
-            }
-
-            message.sources.push(reader.string());
-            continue;
-          }
-          case 5: {
-            if (tag !== 42) {
-              break;
-            }
-
-            message.ticks.push(Tick.decode(reader, reader.uint32()));
-            continue;
-          }
-          case 6: {
-            if (tag !== 50) {
-              break;
-            }
-
-            message.bars.push(Bar.decode(reader, reader.uint32()));
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create(base?: DeepPartial<ReplayResponse>): ReplayResponse {
-    return ReplayResponse.fromPartial(base ?? {});
-  },
-  fromPartial(object: DeepPartial<ReplayResponse>): ReplayResponse {
-    const message = createBaseReplayResponse();
-    message.priceScale = object.priceScale ?? 0;
-    message.fidelity = object.fidelity ?? 0;
-    message.complete = object.complete ?? false;
-    message.sources = object.sources?.map((e) => e) || [];
-    message.ticks = object.ticks?.map((e) => Tick.fromPartial(e)) || [];
-    message.bars = object.bars?.map((e) => Bar.fromPartial(e)) || [];
-    return message;
-  },
-};
-
-function createBaseTick(): Tick {
-  return { tsMs: 0n, priceScaled: 0, sourceId: 0, seq: 0n };
-}
-
-export const Tick: MessageFns<Tick> = {
-  encode(message: Tick, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.tsMs !== 0n) {
-      if (BigInt.asUintN(64, message.tsMs) !== message.tsMs) {
-        throw new globalThis.Error("value provided for field message.tsMs of type uint64 too large");
-      }
-      writer.uint32(8).uint64(message.tsMs);
-    }
-    if (message.priceScaled !== 0) {
-      writer.uint32(16).sint32(message.priceScaled);
-    }
-    if (message.sourceId !== 0) {
-      writer.uint32(24).uint32(message.sourceId);
-    }
-    if (message.seq !== 0n) {
-      if (BigInt.asUintN(64, message.seq) !== message.seq) {
-        throw new globalThis.Error("value provided for field message.seq of type uint64 too large");
-      }
-      writer.uint32(32).uint64(message.seq);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): Tick {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
-    if (previousRecursionDepth >= 100) {
-      throw new globalThis.Error("protobuf decode recursion limit exceeded");
-    }
-    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
-    try {
-      const end = length === undefined ? reader.len : reader.pos + length;
-      const message = createBaseTick();
-      while (reader.pos < end) {
-        const tag = reader.uint32();
-        switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 8) {
-              break;
-            }
-
-            message.tsMs = reader.uint64() as bigint;
-            continue;
-          }
-          case 2: {
-            if (tag !== 16) {
-              break;
-            }
-
-            message.priceScaled = reader.sint32();
-            continue;
-          }
-          case 3: {
-            if (tag !== 24) {
-              break;
-            }
-
-            message.sourceId = reader.uint32();
-            continue;
-          }
-          case 4: {
-            if (tag !== 32) {
-              break;
-            }
-
-            message.seq = reader.uint64() as bigint;
-            continue;
-          }
-        }
-        if ((tag & 7) === 4 || tag === 0) {
-          break;
-        }
-        reader.skip(tag & 7);
-      }
-      return message;
-    } finally {
-      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
-    }
-  },
-
-  create(base?: DeepPartial<Tick>): Tick {
-    return Tick.fromPartial(base ?? {});
-  },
-  fromPartial(object: DeepPartial<Tick>): Tick {
-    const message = createBaseTick();
-    message.tsMs = (object.tsMs !== undefined && object.tsMs !== null) ? BigInt(object.tsMs) : 0n;
-    message.priceScaled = object.priceScaled ?? 0;
-    message.sourceId = object.sourceId ?? 0;
-    message.seq = (object.seq !== undefined && object.seq !== null) ? BigInt(object.seq) : 0n;
     return message;
   },
 };

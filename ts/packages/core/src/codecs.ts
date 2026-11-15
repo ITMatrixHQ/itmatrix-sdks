@@ -1,11 +1,10 @@
 import * as wire from "./_wire/rest.js";
-import type { Bar, Chain, GexGrid, Meta, Replay } from "./types.js";
+import type { Bar, Chain, GexGrid, Meta } from "./types.js";
 
 export interface MarketDataModels {
   gex: GexGrid;
   chain: Chain;
   bars: Bar[];
-  replay: Replay;
 }
 export interface CodecContext {
   symbol: string;
@@ -89,21 +88,6 @@ function decode(operation: keyof MarketDataModels, bytes: Uint8Array, context: C
       return { data: value.bars.map(row => bar(row, priceScale, context)), meta: {
         cursor: value.cursor || null, complete_through: optionalInteger(value.completeThroughMs) ?? null,
         prior_close: value.priorCloseScaled === undefined ? undefined : value.priorCloseScaled / priceScale,
-      } };
-    }
-    case "replay": {
-      const value = wire.ReplayResponse.decode(bytes);
-      const priceScale = scale(value.priceScale);
-      if (value.fidelity !== 0 && value.fidelity !== 1) throw new TypeError("unknown replay fidelity");
-      return { data: {
-        session: context.session ?? "", fidelity: value.fidelity === 0 ? "ticks" : "bars1m",
-        complete: value.complete,
-        events: value.fidelity === 0 ? value.ticks.map(row => {
-          const source = value.sources[row.sourceId];
-          if (source === undefined) throw new TypeError("unknown replay tick source");
-          return [integer(row.tsMs), row.priceScaled / priceScale, source, integer(row.seq)] as const;
-        }) : value.bars.map(row => ({ ts: integer(row.tsMs), o: row.o / priceScale,
-          h: row.h / priceScale, l: row.l / priceScale, c: row.c / priceScale, v: row.v ?? null })),
       } };
     }
   }

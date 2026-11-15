@@ -1,8 +1,8 @@
 """One shared, reconnecting protobuf WebSocket.
 
 An ``itm_`` API key connects with protocol 8, the ``itmatrixhq.v1`` subprotocol
-and a declared client name, and may open live GEX books (:meth:`Stream.gex`).
-Any other credential keeps the 1.0.0 protocol and :meth:`Stream.subscribe`.
+and a declared client name, and opens live GEX books (:meth:`Stream.gex`).
+The stream carries GEX books only.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import random
 import signal
 import threading
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -92,14 +92,6 @@ T = TypeVar("T", default=Frame)
 @dataclass(frozen=True, slots=True)
 class SubscribeOptions:
     symbol: str
-    want: Sequence[str] | None = None
-    timeframe: str | None = None
-    expiry: str | None = None
-    strike_gte: int | None = None
-    strike_lte: int | None = None
-    expiries: str | Sequence[str] | None = None
-    by_expiry: bool | None = None
-    component: str | None = None
 
 
 class Subscription(AsyncIterator[T]):
@@ -155,7 +147,7 @@ class Subscription(AsyncIterator[T]):
         self._finish()
 
     def _feed(self, frame: Frame) -> None:
-        if not self._active or not _matches(self, frame):
+        if not self._active or frame.symbol != self.options.symbol:
             return
         self._put(frame)
 
@@ -276,8 +268,7 @@ class Stream:
         self._max_queue = max_queue
         self._min_delay = min_reconnect
         self._max_delay = max_reconnect
-        # Whether the credential is an API key. Keys use protocol 8 and may
-        # subscribe to books; every other credential keeps protocol 3.
+        # Whether the credential is an API key. Only keys can stream.
         self._key_auth = key_auth
         self._client = client or _client_name()
         self._ping_interval = ping_interval
@@ -302,56 +293,10 @@ class Stream:
         self._live: set[LiveGex] = set()
         self._idle: list[asyncio.Future[None]] = []
 
-    def subscribe(
-        self,
-        topic: str,
-        *,
-        symbol: str,
-        want: Sequence[str] | None = None,
-        timeframe: str | None = None,
-        expiry: str | None = None,
-        strike_gte: int | None = None,
-        strike_lte: int | None = None,
-        expiries: str | Sequence[str] | None = None,
-        by_expiry: bool | None = None,
-        component: str | None = None,
-    ) -> Subscription:
-        if topic not in {"stocks", "spot", "index", "chain", "gex"}:
-            raise ValueError(f"unsupported stream topic {topic!r}")
-        if not symbol:
-            raise ValueError("symbol is required")
-        return Subscription(
-            self,
-            self._new_id(),
-            topic,
-            SubscribeOptions(
-                symbol.upper(),
-                want,
-                timeframe,
-                expiry,
-                strike_gte,
-                strike_lte,
-                expiries,
-                by_expiry,
-                component,
-            ),
-            self._max_queue,
-        )
-
     def _new_id(self) -> str:
         sub_id = f"sdk-{self._next_id}"
         self._next_id += 1
         return sub_id
-
-    def stocks(
-        self,
-        symbol: str,
-        want: Sequence[str] = ("trades", "mid", "bars", "quote"),
-    ) -> Subscription:
-        return self.subscribe("stocks", symbol=symbol, want=want)
-
-    def spot(self, symbol: str) -> Subscription:
-        return self.subscribe("spot", symbol=symbol)
 
     def gex(
         self,
@@ -373,7 +318,6 @@ class Stream:
         ``"put"``). Change them later with ``live.update(...)``. Each symbol is
         its own object, and every object on a client shares one connection.
 
-        Token sessions use ``subscribe("gex", symbol=...)`` for the 1.0.0 frames.
         """
         return self._live_gex(
             symbol,
@@ -446,9 +390,6 @@ class Stream:
             if idle in self._idle:
                 self._idle.remove(idle)
 
-    def chain(self, symbol: str, **options: Any) -> Subscription:
-        return self.subscribe("chain", symbol=symbol, **options)
-
     async def close(self) -> None:
         self._closed = True
         tasks = [
@@ -492,10 +433,7 @@ class Stream:
                     code="invalid_params",
                     reason="api_key_required",
                     terminal=True,
-                    message=(
-                        "live GEX books need an itm_ API key; "
-                        'token sessions use stream.subscribe("gex", symbol=...)'
-                    ),
+                    message="live GEX books need an itm_ API key",
                 )
             async with self._lock:
                 self._subscriptions[subscription.id] = subscription
@@ -506,15 +444,7 @@ class Stream:
                     # iterator, and the SDK keeps retrying what is retryable.
                     self._schedule_reconnect(immediate=True)
             return
-        async with self._lock:
-            self._subscriptions[subscription.id] = subscription
-            try:
-                opened = await self._ensure_socket()
-            except Exception:
-                self._subscriptions.pop(subscription.id, None)
-                raise
-            if not opened:
-                await self._send_subscription(subscription)
+        raise TypeError("only live GEX books can be streamed")
 
     async def _remove(self, subscription: Subscription[Any]) -> None:
         async with self._lock:
@@ -532,7 +462,6 @@ class Stream:
     async def _ensure_socket(self) -> bool:
         if self._socket is not None:
             return False
-        keyed = await self._uses_key()
         ticket_data = await self._ticket()
         ticket = ticket_data.get("ticket")
         if not isinstance(ticket, str) or not ticket:
@@ -542,16 +471,15 @@ class Stream:
         auth: dict[str, Any] = {
             "op": "auth",
             "ticket": ticket,
-            "proto": 3,
+            "proto": KEYED_PROTO,
             "encoding": "protobuf",
+            "client": self._client,
         }
-        if keyed:
-            # The SDK's own heartbeat is the liveness rule, and keyed books are
-            # sent uncompressed, so neither socket-level feature is wanted.
-            options.update(
-                subprotocols=[CLIENT_SUBPROTOCOL], compression=None, ping_interval=None
-            )
-            auth.update(proto=KEYED_PROTO, client=self._client)
+        # The SDK's own heartbeat is the liveness rule, and books are sent
+        # uncompressed, so neither socket-level feature is wanted.
+        options.update(
+            subprotocols=[CLIENT_SUBPROTOCOL], compression=None, ping_interval=None
+        )
         socket = await connect(self._url, **options)
         try:
             await socket.send(json.dumps(auth))
@@ -594,20 +522,11 @@ class Stream:
     async def _send_subscription(self, subscription: Subscription[Any]) -> None:
         if self._socket is None:
             return
-        options = subscription.options
         payload = {
             "op": "sub",
             "id": subscription.id,
             "topic": subscription.topic,
-            "symbol": options.symbol,
-            "want": options.want,
-            "timeframe": options.timeframe,
-            "expiry": options.expiry,
-            "strike_gte": options.strike_gte,
-            "strike_lte": options.strike_lte,
-            "expiries": options.expiries,
-            "by_expiry": options.by_expiry,
-            "component": options.component,
+            "symbol": subscription.options.symbol,
         }
         await self._socket.send(
             json.dumps(
@@ -869,17 +788,6 @@ def _control(message: str) -> Mapping[str, Any]:
     return value
 
 
-def _matches(subscription: Subscription, frame: Frame) -> bool:
-    if frame.symbol != subscription.options.symbol:
-        return False
-    fields = {
-        "stocks": ("trade", "mid", "bar_open", "bar_close", "quote"),
-        "spot": ("spot",),
-        "index": ("index_value",),
-        "gex": ("gex_snap", "gex_delta"),
-        "chain": ("chain_snap", "chain_delta"),
-    }[subscription.topic]
-    return any(frame.HasField(field) for field in fields)
 
 
 def _replace_queue(

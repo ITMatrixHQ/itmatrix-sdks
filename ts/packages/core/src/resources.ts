@@ -10,7 +10,6 @@ import type {
   OffExchangeConcentrationRow,
   OffExchangeOptions,
   OffExchangeProfileRow,
-  PremiumData,
   Quote,
   JsonObject,
   JsonValue,
@@ -91,7 +90,7 @@ const mutate = <T>(
 export type Classification = "professional" | "non_professional";
 export type FundamentalsDataset =
   | "ratios" | "income" | "balance-sheet" | "float"
-  | "short-interest" | "dividends" | "news";
+  | "short-interest" | "dividends";
 export type ImportFormat = "jsonl" | "csv";
 
 type FlowLargeTradesBase = {
@@ -112,15 +111,6 @@ export type FlowEodOptions = {
   | { symbol: string; minPremiumUsd?: number }
   | { symbol?: string; minPremiumUsd: number }
 );
-export interface FlowPremiumOptions {
-  sessions?: number;
-  bucket?: "5m";
-  minPremiumUsd?: number;
-  dte?: "all" | "zero" | "ex_zero";
-  /** Inclusive source-event cursor in epoch milliseconds. */
-  toMs?: number;
-  signal?: AbortSignal;
-}
 
 export class AccountResource {
   constructor(private readonly request: ResourceRequester) {}
@@ -131,18 +121,6 @@ export class AccountResource {
 
   submitClassification(classification: Classification): Promise<ApiResult<JsonObject>> {
     return mutate(this.request, "/v2/account/classification", "POST", { classification });
-  }
-
-  listKeys(): Promise<ApiResult<JsonValue>> {
-    return get(this.request, "/v2/account/keys");
-  }
-
-  createKey(): Promise<ApiResult<JsonObject>> {
-    return mutate(this.request, "/v2/account/keys", "POST");
-  }
-
-  deleteKey(keyId: string): Promise<ApiResult<JsonObject>> {
-    return mutate(this.request, `/v2/account/keys/${id(keyId)}`, "DELETE");
   }
 
   usage(): Promise<ApiResult<JsonObject>> {
@@ -157,8 +135,7 @@ export class AccountResource {
  * `cursor`. An empty `data` with a `meta.note` is an honest empty answer, not
  * a denial.
  *
- * Individual prints, blocks and evidence snapshots are app-only and are not
- * reachable through this public resource.
+ * Individual prints and blocks are not part of this API.
  */
 export class OffExchangeResource {
   constructor(
@@ -238,36 +215,12 @@ export class FlowResource {
     });
   }
 
-  /**
-   * Five-minute premium over retained detected large-trade legs. App-only,
-   * Pro, and CBOE-attested. Missing buckets are unknown, never synthetic zero.
-   */
-  premium(symbol: string, options: FlowPremiumOptions = {}): Promise<ApiResult<PremiumData>> {
-    return get(this.request, "/v2/flow/premium", {
-      symbol: symbol.toUpperCase(),
-      sessions: options.sessions,
-      bucket: options.bucket,
-      min_premium_usd: options.minPremiumUsd,
-      dte: options.dte,
-      to_ms: options.toMs,
-    }, options.signal);
-  }
-
   crossSection(symbol: string, session?: string): Promise<ApiResult<JsonObject>> {
     return get(
       this.request,
       `/v2/flow/${id(symbol.toUpperCase())}/cross-section`,
       { session },
     );
-  }
-
-  /**
-   * Every leg of every large trade seen on the bus this session, newest first.
-   * In-memory and session-scoped: it starts empty each day and does not
-   * backfill, so treat an empty `data` as "nothing yet today".
-   */
-  prints(options: Query = {}): Promise<ApiResult<JsonValue>> {
-    return get(this.request, "/v2/flow/prints", options);
   }
 
   /** Persisted large prints for an explicit session, bounded to 100 rows. */
@@ -283,19 +236,6 @@ export class FlowResource {
     });
   }
 
-  /** One contract's trade tape. `contract` is an OCC symbol. */
-  optionTape(contract: string, options: Query = {}): Promise<ApiResult<JsonValue>> {
-    return get(this.request, `/v2/options/${id(contract.toUpperCase())}/tape`, options);
-  }
-
-  /** One contract's volume-at-price footprint, bucketed by `tf`. */
-  optionFootprint(contract: string, options: Query = {}): Promise<ApiResult<JsonValue>> {
-    return get(
-      this.request,
-      `/v2/options/${id(contract.toUpperCase())}/footprint`,
-      options,
-    );
-  }
 }
 
 /**
@@ -358,32 +298,6 @@ export class FundamentalsResource {
     );
   }
 
-  newsDigest(
-    query: Query & { kind: "ticker" | "brief" },
-    options: ConditionalOptions & { ifNoneMatch: string },
-  ): Promise<ApiResult<JsonValue> | NotModified>;
-  newsDigest(
-    query: Query & { kind: "ticker" | "brief" }, options?: ConditionalOptions,
-  ): Promise<ApiResult<JsonValue>>;
-  newsDigest(
-    query: Query & { kind: "ticker" | "brief" }, options: ConditionalOptions = {},
-  ): Promise<ApiResult<JsonValue> | NotModified> {
-    return conditional<JsonValue>(
-      this.request, "/v2/news/digest", query, options.ifNoneMatch, options.signal,
-    );
-  }
-
-  news(
-    query: Query, options: ConditionalOptions & { ifNoneMatch: string },
-  ): Promise<ApiResult<JsonValue> | NotModified>;
-  news(query?: Query, options?: ConditionalOptions): Promise<ApiResult<JsonValue>>;
-  news(
-    query: Query = {}, options: ConditionalOptions = {},
-  ): Promise<ApiResult<JsonValue> | NotModified> {
-    return conditional<JsonValue>(
-      this.request, "/v2/news", query, options.ifNoneMatch, options.signal,
-    );
-  }
 }
 
 export class JournalResource {
@@ -507,10 +421,6 @@ export class ScreenerResource {
 export class ProtocolResource {
   constructor(private readonly request: ResourceRequester) {}
 
-  descriptor(proto = 3): Promise<ApiResult<JsonObject>> {
-    return get(this.request, "/v2/ws-protocol.json", { proto });
-  }
-
   websocketSchema(): Promise<ApiResult<string>> {
     return this.request("/v2/ws-protocol.proto", { accept: "text/plain" });
   }
@@ -580,13 +490,9 @@ export class WatchlistsResource {
 export const SUPPORTED_OPERATIONS = [
   "account_getClassification",
   "account_submitClassification",
-  "account_listKeys",
-  "account_createKey",
-  "account_deleteKey",
   "account_getUsage",
   "bars_getBars",
   "bars_getOptionBars",
-  "bars_getReplay",
   "chain_getChain",
   "chain_getExpirations",
   "offexchange_getActivity",
@@ -598,16 +504,8 @@ export const SUPPORTED_OPERATIONS = [
   "flow_getCrossSection",
   "flow_getEod",
   "flow_getLargeTrades",
-  "flow_getOptionFootprint",
-  "flow_getOptionTape",
-  "flow_getPremium",
-  "flow_getPrints",
-  "flow_getUoa",
-  "flow_getUoaEvent",
   "economy_getTreasuryYields",
   "fundamentals_getDataset",
-  "news_getNews",
-  "news_getDigest",
   "gex_getGrid",
   "gex_getHistory",
   "gex_getReference",
@@ -627,13 +525,10 @@ export const SUPPORTED_OPERATIONS = [
   "reference_listSymbols",
   "reference_getSymbol",
   "reference_lookupSymbol",
-  "studies_postAuthor",
-  "studies_postAuthorFeedback",
   "screener_getMovers",
   "screener_getSectors",
   "stream_createTicket",
   "stream_connectWs",
-  "stream_getProtocol",
   "stream_getWsProtocolProto",
   "stream_getRestProtocolProto",
   "vol_getContractGreeks",
@@ -644,33 +539,5 @@ export const SUPPORTED_OPERATIONS = [
   "watchlists_deleteWatchlist",
 ] as const;
 
-// Pinned operations that have no SDK method: the chat, instruments, social and
-// news-board app routes, all app-only (pin 2.20.0).
-export const INTENTIONALLY_UNSUPPORTED_OPERATIONS = [
-  "darkpool_getScanner", "darkpool_getDataset", "darkpool_getBreadth",
-  "chat_postChat",
-  "chat_postOutcome",
-  "chat_getStatus",
-  "instruments_list",
-  "instruments_get",
-  "instruments_getBars",
-  "instruments_getQuote",
-  "news_getBoard",
-  "social_shareConfig",
-  "social_getConfig",
-  "social_loadConfig",
-  "social_getFeed",
-  "social_unfollow",
-  "social_follow",
-  "social_publish",
-  "social_deletePost",
-  "social_getPost",
-  "social_getOwnProfile",
-  "social_saveOwnProfile",
-  "social_checkHandle",
-  "social_getProfile",
-  "social_getProfilePosts",
-  "social_getPosts",
-  "social_getPreview",
-  "social_putPreview",
-] as const;
+// Pinned public operations that have no SDK method (none at pin 2.21.0).
+export const INTENTIONALLY_UNSUPPORTED_OPERATIONS = [] as const;

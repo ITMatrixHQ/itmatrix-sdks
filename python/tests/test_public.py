@@ -6,7 +6,7 @@ from datetime import date
 import httpx
 
 import itmatrix as itm
-from itmatrix._core._wire.rest_pb2 import ChainResponse, GexGridResponse, ReplayResponse
+from itmatrix._core._wire.rest_pb2 import ChainResponse, GexGridResponse
 
 GRID = {
     "spot": None,
@@ -169,25 +169,3 @@ class AsyncPublicTests(unittest.IsolatedAsyncioTestCase):
             )
         ) as client:
             self.assertEqual(client.get_gex("SPY").data.net_gex, 12)
-
-    async def test_replay_normalizes_prices_without_truncating_sequences(self):
-        wire = ReplayResponse(
-            price_scale=10000, fidelity=0, complete=True, sources=["trade"]
-        )
-        wire.ticks.add(
-            ts_ms=1234567890123, price_scaled=12500, source_id=0, seq=9007199254740993
-        )
-        async with itm.AsyncITMClient(
-            transport="protobuf",
-            http_transport=httpx.MockTransport(
-                lambda _: httpx.Response(
-                    200,
-                    content=wire.SerializeToString(),
-                    headers={"content-type": "application/x-protobuf"},
-                )
-            ),
-        ) as client:
-            result = await client.get_replay("SPY", date="2026-09-04")
-        self.assertEqual(result.data.events[0].price, 1.25)
-        self.assertEqual(result.data.events[0].seq, 9007199254740993)
-        self.assertEqual(result.data.session, "2026-09-04")

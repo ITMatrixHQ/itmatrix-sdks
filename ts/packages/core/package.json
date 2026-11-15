@@ -1,6 +1,6 @@
 {
   "name": "@itmatrixhq/core",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Typed TypeScript client for the ITMatrixHQ API",
   "keywords": [
     "itmatrixhq",

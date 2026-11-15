@@ -24,7 +24,7 @@ needs no disposal for REST; call `close()` after using `stream`.
 
 `Client` and `AsyncClient` remain compatibility aliases in Python; TypeScript also retains `Client`.
 
-Use `itm.AsyncITMClient` with `async with` for asynchronous requests and streams. Both clients expose `get_gex`, `get_option_chain`, `get_bars`, `get_replay`, `list_expirations`, `list_symbols` and `lookup_symbol`, plus grouped resources for the broader API.
+Use `itm.AsyncITMClient` with `async with` for asynchronous requests and streams. Both clients expose `get_gex`, `get_option_chain`, `get_bars`, `list_expirations`, `list_symbols` and `lookup_symbol`, plus grouped resources for the broader API.
 
 Options-flow discovery is available through the grouped `flow` resource. It
 is deliberately bounded: provide a ticker or premium floor for live large
@@ -49,7 +49,7 @@ console.log(grid.data.net_gex, grid.meta.caps);
 | [Python](python/README.md) `itmatrix` | `pip install itmatrix` | Sync + async REST, public JSON/protobuf, async streams |
 | [TypeScript](ts/README.md) `@itmatrixhq/core` | `npm install @itmatrixhq/core` | REST, public JSON/protobuf, streams |
 
-Python and TypeScript's friendly market-data methods normalize JSON and protobuf into stable domain models. Low-level wire APIs remain available for callers that need exact protobuf fields. Missing values remain missing; timestamps and strike units are documented. Every result retains metadata, status, request ID and ETag. Entitlements are enforced by the server; methods for app-only data do not give an API key access to it.
+Python and TypeScript's friendly market-data methods normalize JSON and protobuf into stable domain models. Low-level wire APIs remain available for callers that need exact protobuf fields. Missing values remain missing; timestamps and strike units are documented. Every result retains metadata, status, request ID and ETag. Entitlements are enforced by the server.
 
 ## Streaming GEX with an API key
 

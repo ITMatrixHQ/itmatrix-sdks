@@ -53,14 +53,6 @@ describe("grouped resources", () => {
       symbol: "spy",
       right: "call",
     });
-    const premium = await client.flow.premium("spy", {
-      sessions: 2,
-      bucket: "5m",
-      minPremiumUsd: 100_000,
-      dte: "zero",
-      toMs: 1_790_000_000_000,
-    });
-
     expect(calls[0]?.pathname).toBe("/v2/flow/large-trades");
     expect(calls[0]?.searchParams.get("min_premium_usd")).toBe("250000");
     expect(calls[0]?.searchParams.get("limit")).toBe("25");
@@ -68,14 +60,6 @@ describe("grouped resources", () => {
     expect(calls[1]?.searchParams.get("session")).toBe("2026-09-25");
     expect(calls[1]?.searchParams.get("symbol")).toBe("SPY");
     expect(calls[1]?.searchParams.get("right")).toBe("call");
-    expect(calls[2]?.pathname).toBe("/v2/flow/premium");
-    expect(calls[2]?.searchParams.get("symbol")).toBe("SPY");
-    expect(calls[2]?.searchParams.get("sessions")).toBe("2");
-    expect(calls[2]?.searchParams.get("bucket")).toBe("5m");
-    expect(calls[2]?.searchParams.get("min_premium_usd")).toBe("100000");
-    expect(calls[2]?.searchParams.get("dte")).toBe("zero");
-    expect(calls[2]?.searchParams.get("to_ms")).toBe("1790000000000");
-    expect(premium.data).toEqual({});
   });
 
   it("requests an exact immutable GEX reference book", async () => {

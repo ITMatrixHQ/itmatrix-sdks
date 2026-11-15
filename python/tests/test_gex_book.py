@@ -306,17 +306,9 @@ class TrackerTests(unittest.TestCase):
         self.keyframe()
         self.assertFalse(self.book.awaiting_keyframe)
 
-    def test_v1_book_frames_and_other_payloads_are_ignored(self) -> None:
+    def test_a_frame_without_a_book_is_ignored(self) -> None:
         self.keyframe()
-        legacy = Frame(symbol="SPY")
-        legacy.gex_book.version = 8
-        self.assertEqual(self.book.apply(legacy), (None, False))
-        legacy_update = Frame(symbol="SPY")
-        legacy_update.gex_book_update.version = 8
-        self.assertEqual(self.book.apply(legacy_update), (None, False))
-        other = Frame(symbol="SPY")
-        other.spot.ts_ms = 1
-        self.assertEqual(self.book.apply(other), (None, False))
+        self.assertEqual(self.book.apply(Frame(symbol="SPY")), (None, False))
         self.assertEqual(self.book.state.version, 7)  # type: ignore[union-attr]
 
 

@@ -65,9 +65,6 @@ EXPECTED = {
     "gex_getReference": ["date", "basis"],
     "flow_getLargeTrades": ["symbol", "session", "min_premium_usd", "limit"],
     "flow_getCrossSection": ["session"],
-    "flow_getPremium": [
-        "symbol", "sessions", "bucket", "min_premium_usd", "dte", "to_ms",
-    ],
     "flow_getEod": [
         "symbol", "session", "from_ms", "to_ms", "min_premium_usd",
         "right", "expiry",

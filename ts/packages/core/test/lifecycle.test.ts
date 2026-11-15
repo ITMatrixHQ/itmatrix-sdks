@@ -33,6 +33,7 @@ describe("client lifecycle", () => {
   it("close is idempotent, ends the stream, and later use is an error", async () => {
     const sockets: IdleSocket[] = [];
     const client = new ITMClient({
+      apiKey: "itm_test",
       fetch: async () => Response.json({ data: { ticket: "t", exp: 0 } }),
       stream: {
         webSocketFactory: () => {
@@ -42,7 +43,7 @@ describe("client lifecycle", () => {
         },
       },
     });
-    const subscription = client.stream.spot("SPY");
+    const subscription = client.stream.bookFeed("SPY");
     for (let i = 0; i < 20 && sockets.length === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }

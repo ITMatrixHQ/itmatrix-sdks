@@ -30,7 +30,7 @@ class GexHistoryOptions(TypedDict):
     """Options for a whole session's GEX captures.
 
     ``date`` is the ET session; ``from_``/``to`` are ``HH:MM`` exchange-local
-    bounds on it, half-open ``[from, to)`` like the stocks replay window, so
+    bounds on it, half-open ``[from, to)``, so
     ``to="16:00"`` drops the closing capture — ask for ``"16:05"`` to keep it.
     A full uncapped day measures around 5.5 MB, so ``top`` is usually wanted.
     """
@@ -73,9 +73,3 @@ class BarsOptions(TypedDict):
     timeout: NotRequired[float]
 
 
-class ReplayOptions(TypedDict):
-    date: str
-    from_: NotRequired[str]
-    to: NotRequired[str]
-    tz: NotRequired[str]
-    timeout: NotRequired[float]

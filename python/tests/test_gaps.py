@@ -81,7 +81,7 @@ class FundamentalsTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ConditionalReadTests(unittest.IsolatedAsyncioTestCase):
-    async def test_if_none_match_on_fundamentals_and_news(self) -> None:
+    async def test_if_none_match_on_fundamentals(self) -> None:
         calls: list[httpx.Request] = []
         http = _recorder(calls, httpx.Response(304, headers={"etag": '"v1"'}))
         self.addAsyncCleanup(http.aclose)
@@ -92,15 +92,6 @@ class ConditionalReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, 304)
         self.assertTrue(result.not_modified)
 
-        await client.fundamentals.news(if_none_match='"n1"', symbols="SPY")
-        self.assertEqual(calls[1].headers["if-none-match"], '"n1"')
-        self.assertEqual(calls[1].url.params["symbols"], "SPY")
-        # The conditional token is a header, never a query param.
-        self.assertNotIn("if_none_match", calls[1].url.params)
-
-        await client.fundamentals.digest(kind="brief", if_none_match='"d1"')
-        self.assertEqual(calls[2].headers["if-none-match"], '"d1"')
-        self.assertEqual(calls[2].url.params["kind"], "brief")
 
     async def test_unconditional_read_sends_no_header(self) -> None:
         calls: list[httpx.Request] = []
@@ -108,7 +99,7 @@ class ConditionalReadTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(http.aclose)
         client = ITMClient(http_client=http)
 
-        await client.fundamentals.news()
+        await client.fundamentals.get("AAPL", "ratios")
         self.assertNotIn("if-none-match", calls[0].headers)
 
 

@@ -3,7 +3,6 @@ import {
   BarsResponse,
   ChainResponse,
   GexGridResponse,
-  ReplayResponse,
 } from "./_wire/rest.js";
 import { DEFAULT_BASE_URL } from "./config.js";
 import { CLIENT_NAME, CURRENT_HEADER, SDK_HEADER, isServerRuntime, noticeCurrent } from "./version.js";
@@ -30,7 +29,7 @@ import {
 import { Stream, type StreamConfig } from "./stream.js";
 import type {
   ApiResult, Bar, BarsOptions, Chain, ChainOptions, Credential, GexGrid,
-  GexHistory, GexHistoryOptions, GexOptions, GexReference, GexReferenceOptions, Meta, NotModified, Query, QueryValue, Replay, ReplayOptions,
+  GexHistory, GexHistoryOptions, GexOptions, GexReference, GexReferenceOptions, Meta, NotModified, Query, QueryValue,
   Transport, WireData, SymbolInfo, SymbolIdentity,
 } from "./types.js";
 
@@ -223,7 +222,7 @@ export class ITMClient<T extends Transport = "json"> {
     this.watchlists = new WatchlistsResource(request);
 
     this.streamConfig = {
-      // An `itm_` key streams with protocol 8; any other credential keeps protocol 3.
+      // Only an `itm_` key can stream.
       keyAuth: async () => (await resolveCredential(this.credential))?.startsWith("itm_") === true,
       ...options.stream,
       url: options.stream?.url ?? websocketUrl(this.baseUrl),
@@ -253,7 +252,7 @@ export class ITMClient<T extends Transport = "json"> {
   }
 
   /**
-   * A whole session's GEX captures in one call — the replay day-bundle.
+   * A whole session's GEX captures in one call.
    *
    * `date` is the ET session; `from`/`to` are `HH:MM` exchange-local bounds,
    * half-open `[from, to)`, so `to: "16:00"` drops the closing capture. JSON
@@ -314,12 +313,6 @@ export class ITMClient<T extends Transport = "json"> {
     });
   }
 
-  getReplay(symbol: string, options: ReplayOptions): Promise<ApiResult<Replay>> {
-    return this.marketData("replay", `/v2/stocks/${symbolPath(symbol)}/replay`, {
-      date: options.date, from: options.from, to: options.to, tz: options.tz,
-    }, { symbol: normalizeSymbol(symbol), session: options.date }, options.signal);
-  }
-
   listExpirations(symbol: string, options: ChainOptions = {}): Promise<ApiResult<string[]>> {
     return this.expirations(symbol, options);
   }
@@ -359,13 +352,6 @@ export class ITMClient<T extends Transport = "json"> {
       tz: options.tz, source: options.source, adj: options.adj, limit: options.limit,
       cursor: options.cursor,
     }, BarsResponse.decode, options.signal);
-  }
-
-  replay(symbol: string, options: ReplayOptions):
-    Promise<ApiResult<WireData<T, Replay, ReplayResponse>>> {
-    return this.wire(`/v2/stocks/${symbolPath(symbol)}/replay`, {
-      date: options.date, from: options.from, to: options.to, tz: options.tz,
-    }, ReplayResponse.decode, options.signal);
   }
 
   chain(symbol: string, options: ChainOptions = {}):
@@ -588,9 +574,7 @@ function binaryMeta(headers: Headers): Meta {
   const extra = headerJson(headers.get("x-itm-extra"));
   const meta: Meta = extra && typeof extra === "object" && !Array.isArray(extra)
     ? { ...(extra as Record<string, unknown>) } : {};
-  const plane = headers.get("x-itm-plane");
   const caps = headerJson(headers.get("x-itm-caps"));
-  if (plane !== null) meta.plane = plane;
   if (caps !== undefined) meta.caps = caps;
   return meta;
 }

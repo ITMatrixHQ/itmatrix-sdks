@@ -17,14 +17,12 @@ let frameCodec: Promise<typeof import("./_wire/ws.js")> | undefined;
 const loadFrameCodec = (): Promise<typeof import("./_wire/ws.js")> =>
   (frameCodec ??= import("./_wire/ws.js"));
 
-export type Topic = "stocks" | "spot" | "index" | "chain" | "gex";
+export type Topic = "gex";
 
 /**
  * An `itm_` API key connects with protocol 8, the `itmatrixhq.v1`
- * subprotocol and a declared client name, and may open live GEX books.
- * Protocol 8 carries the v2 book (`GexStrikeBook`); the server refuses a keyed
- * auth at 7 with `proto_required`. Any other credential keeps the 1.0.0
- * protocol.
+ * subprotocol and a declared client name, and opens live GEX books. The
+ * stream carries GEX books only.
  */
 const CLIENT_SUBPROTOCOL = "itmatrixhq.v1";
 const KEYED_PROTO = 8;
@@ -87,28 +85,19 @@ export class StreamError extends ITMError {
 
 export interface SubscribeOptions {
   symbol: string;
-  want?: readonly string[];
-  timeframe?: string;
-  expiry?: string;
-  strikeGte?: number;
-  strikeLte?: number;
-  expiries?: string | readonly string[];
-  byExpiry?: boolean;
-  component?: string;
 }
 
 export interface StreamConfig {
   url: string;
   ticket: () => Promise<{ ticket: string; exp: number }>;
-  /** Builds the socket. `protocols` is set for keyed connections only. */
+  /** Builds the socket with the `itmatrixhq.v1` subprotocol. */
   webSocketFactory?: (url: string, protocols?: string[]) => WebSocket;
   maxQueue?: number;
   minReconnectMs?: number;
   maxReconnectMs?: number;
   /**
-   * Whether the credential is an `itm_` API key. Keys use protocol 8 and may
-   * subscribe to books; every other credential keeps protocol 3. `ITMClient`
-   * sets this from its credential.
+   * Whether the credential is an `itm_` API key. Only keys can stream.
+   * `ITMClient` sets this from its credential.
    */
   keyAuth?: boolean | (() => boolean | Promise<boolean>);
   /** The declared client, `itmatrix-typescript/<version>` by default. */
@@ -260,27 +249,6 @@ abstract class Subscription<T> implements AsyncIterableIterator<T> {
   }
 }
 
-/** Raw protobuf frames for one topic and symbol. */
-export class StreamSubscription extends Subscription<Frame> {
-  constructor(
-    id: string,
-    topic: Topic,
-    options: SubscribeOptions,
-    maximum: number,
-    private readonly stop: (subscription: StreamSubscription) => void,
-  ) {
-    super(id, topic, options, maximum);
-  }
-
-  protected detach(): void {
-    this.stop(this);
-  }
-
-  feed(frame: Frame): void {
-    if (this.active && matches(this, frame)) this.queue.push(frame);
-  }
-}
-
 /**
  * One symbol's reconstructed GEX book on the shared connection. With an owner
  * (a {@link LiveGex}) every applied state, failure and connection change goes
@@ -346,7 +314,7 @@ export class BookFeed extends Subscription<GexBookState> {
   }
 }
 
-type AnySubscription = StreamSubscription | BookFeed;
+type AnySubscription = BookFeed;
 
 /** One WebSocket and what is known about it. */
 interface Connection {
@@ -414,28 +382,6 @@ export class Stream {
     this.random = config.random ?? Math.random;
   }
 
-  subscribe(topic: Topic, options: SubscribeOptions): StreamSubscription {
-    if (!options.symbol) throw new TypeError("symbol is required");
-    const subscription: StreamSubscription = new StreamSubscription(
-      this.newId(),
-      topic,
-      { ...options, symbol: options.symbol.toUpperCase() },
-      this.maxQueue,
-      (value) => this.remove(value),
-    );
-    this.add(subscription);
-    return subscription;
-  }
-
-  stocks(symbol: string, want: readonly string[] = ["trades", "mid", "bars", "quote"]):
-    StreamSubscription {
-    return this.subscribe("stocks", { symbol, want });
-  }
-
-  spot(symbol: string): StreamSubscription {
-    return this.subscribe("spot", { symbol });
-  }
-
   /**
    * The live GEX book of one symbol. Requires an `itm_` API key.
    *
@@ -445,8 +391,6 @@ export class Stream {
    * `{ within: 0.05 }` (5% of spot) or `{ between: [590, 610] }`, optionally
    * with `top` and `by`. Change them later with `live.update(...)`. Each symbol
    * is its own object, and every object on a client shares one connection.
-   *
-   * Token sessions use `subscribe("gex", { symbol })` for the 1.0.0 frames.
    */
   gex(symbol: string, options: GexFilter = {}): LiveGex {
     if (typeof symbol !== "string") {
@@ -507,11 +451,6 @@ export class Stream {
       return;
     }
     this.add(feed);
-  }
-
-  chain(symbol: string, options: Omit<SubscribeOptions, "symbol"> = {}):
-    StreamSubscription {
-    return this.subscribe("chain", { ...options, symbol });
   }
 
   close(): void {
@@ -692,21 +631,16 @@ export class Stream {
   }
 
   private open(ticket: string, keyed: boolean): Promise<void> {
-    const socket = keyed
-      ? this.factory(this.config.url, [CLIENT_SUBPROTOCOL])
-      : this.factory(this.config.url);
+    const socket = this.factory(this.config.url, [CLIENT_SUBPROTOCOL]);
     const connection: Connection = {
       socket, keyed, authed: false, dead: false, lastRx: performance.now(),
     };
     this.connection = connection;
     socket.binaryType = "arraybuffer";
     const auth: Record<string, unknown> = {
-      op: "auth", ticket, proto: 3, encoding: "protobuf",
+      op: "auth", ticket, proto: KEYED_PROTO, encoding: "protobuf",
+      client: this.config.client ?? CLIENT_NAME,
     };
-    if (keyed) {
-      auth.proto = KEYED_PROTO;
-      auth.client = this.config.client ?? CLIENT_NAME;
-    }
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error("stream authentication timed out")),
@@ -937,14 +871,6 @@ export class Stream {
       id: subscription.id,
       topic: subscription.topic,
       symbol: options.symbol,
-      want: options.want,
-      timeframe: options.timeframe,
-      expiry: options.expiry,
-      strike_gte: options.strikeGte,
-      strike_lte: options.strikeLte,
-      expiries: options.expiries,
-      by_expiry: options.byExpiry,
-      component: options.component,
     });
   }
 
@@ -959,28 +885,12 @@ export class Stream {
   }
 }
 
-function matches(subscription: StreamSubscription, frame: Frame): boolean {
-  if (frame.symbol !== subscription.options.symbol) return false;
-  switch (subscription.topic) {
-    case "stocks":
-      return !!(frame.trade || frame.mid || frame.barOpen || frame.barClose || frame.quote);
-    case "spot":
-      return frame.spot !== undefined;
-    case "index":
-      return frame.indexValue !== undefined;
-    case "gex":
-      return !!(frame.gexSnap || frame.gexDelta);
-    case "chain":
-      return !!(frame.chainSnap || frame.chainDelta);
-  }
-}
-
 function notAKey(): StreamError {
   return new StreamError({
     code: "invalid_params",
     reason: "api_key_required",
     terminal: true,
-    message: 'live GEX books need an itm_ API key; token sessions use stream.subscribe("gex", { symbol })',
+    message: "live GEX books need an itm_ API key",
   });
 }
 

@@ -39,7 +39,6 @@ from source instead, run `pip install ./python` from the repository root.
 | `list_symbols(symbol_class="equity")` | `Symbol` values from the registry |
 | `lookup_symbol("spy")` | `SymbolIdentity` with broad class and conservative instrument classification |
 | `get_bars(symbol, from_=..., to=..., timeframe="1m")` | `Bars` with `bars`, `cursor`, and completeness |
-| `get_replay(symbol, date="2026-09-04")` | `Replay` with `Tick` or `Bar` events |
 | `get_gex_analysis(symbol)` | Server net GEX and zero gamma plus ranked **visible** positive/negative strike levels |
 | `get_bars_for_period(symbol, "today")` | New York calendar-day intraday bars; longer named periods default to daily bars |
 
@@ -85,16 +84,12 @@ method or raw-evidence route.
 with itm.ITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
     rates = client.economy.treasury_yields()
     trades = client.journal.list_trades()
-    news = client.fundamentals.digest(kind="brief", scope="market")
 
     # A whole session's GEX captures. `to` is exclusive, so 16:00 drops the close.
     day = client.get_gex_history("SPY", date="2026-09-04", from_="09:25", to="16:05", top=120)
 
     # Exact immutable book; captured_at=None means unavailable, not zero.
     reference = client.get_gex_reference("SPY", date="2026-09-25", basis="prev_close")
-
-    # First-party app session only: Basic or higher plus CBOE attestation, explicitly partial.
-    premium = client.flow.premium("SPY", sessions=2, dte="zero", min_premium_usd=100_000)
 
     # Our own implied vol, out of the greeks engine.
     term = client.vol.term("SPY")
@@ -120,8 +115,7 @@ contract rather than a synonym for `health()` — it is non-2xx while the proces
 is still warming up.
 
 Grouped resources and `request("/v2/...")` expose raw JSON data for less common
-operations. Endpoint availability still depends on server entitlements. Installing
-an SDK does not grant app-only products such as replay, live flow prints or UOA.
+operations. Endpoint availability still depends on server entitlements.
 Bars and option chains are public to API keys. Flow and off-exchange reads also need
 a non-professional classification on the account. Without it a key gets
 `403 attestation_required`. Index symbols are `403 not_entitled_symbol` for keys.
@@ -211,7 +205,6 @@ the book's own thread (`itmatrix-gex-handlers`), or on an executor you pass with
 The SDK keeps the book correct. It checks a CRC on every frame, asks for a fresh
 keyframe on any gap, backs off with jitter and resubscribes after a reconnect. A
 refusal it cannot retry is an `error` with `terminal` set, then the book closes.
-Signed-in sessions keep raw frames through `stream.subscribe("gex", symbol=...)`.
 Recipes (flip alerts, many symbols, web handlers, pandas, reconnects, async I/O) are
 in the [streaming guide](../docs/streaming.md#recipes). See also `examples/gex_stream.py`.
 

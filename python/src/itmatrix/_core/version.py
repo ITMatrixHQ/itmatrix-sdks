@@ -21,7 +21,7 @@ SDK_HEADER = "X-ITM-SDK"
 CURRENT_HEADER = "X-ITM-SDK-Current"
 SILENCE_ENV = "ITMATRIX_NO_UPGRADE_CHECK"
 # Used only when the package metadata is missing (a source checkout on sys.path).
-_FALLBACK_VERSION = "1.2.0"
+_FALLBACK_VERSION = "1.2.1"
 _RELEASE = re.compile(r"^\s*v?(\d+)\.(\d+)")
 
 

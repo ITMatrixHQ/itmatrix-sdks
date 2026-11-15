@@ -19,7 +19,6 @@ from .models import (
     OffExchangeCompositionRow,
     OffExchangeConcentrationRow,
     OffExchangeProfileRow,
-    PremiumData,
     QueryValue,
     Quote,
     Result,
@@ -28,27 +27,6 @@ from .models import (
 
 Requester = Callable[..., Awaitable[Result[Any]]]
 Classification = Literal["professional", "non_professional"]
-DarkpoolConditionCategory = Literal[
-    "regular_way",
-    "odd_lot",
-    "package_price",
-    "form_t",
-    "average_price",
-    "derivatively_priced",
-    "late_oos",
-]
-DarkpoolSort = Literal[
-    "rank",
-    "off_exch_notional",
-    "off_exch_volume",
-    "share",
-    "trade_count",
-    "z20",
-    "z60",
-    "pctile_20",
-    "rel_print_max",
-    "accel_5_20",
-]
 FundamentalsDataset = Literal[
     "ratios",
     "income",
@@ -56,7 +34,6 @@ FundamentalsDataset = Literal[
     "float",
     "short-interest",
     "dividends",
-    "news",
 ]
 ImportFormat = Literal["jsonl", "csv"]
 
@@ -84,15 +61,6 @@ class AccountResource:
             method="POST",
             body={"classification": classification},
         )
-
-    async def list_keys(self) -> Result[Any]:
-        return await self._request("/v2/account/keys")
-
-    async def create_key(self) -> Result[Any]:
-        return await self._request("/v2/account/keys", method="POST")
-
-    async def delete_key(self, key_id: str) -> Result[Any]:
-        return await self._request(f"/v2/account/keys/{_id(key_id)}", method="DELETE")
 
     async def usage(self) -> Result[Any]:
         return await self._request("/v2/account/usage")
@@ -216,7 +184,7 @@ class FlowResource:
     ) -> Result[Any]:
         """Newest grouped large trades, bounded to at most 100 events.
 
-        API requests must narrow the retained OPRA feed by ``symbol`` or
+        API requests must narrow the feed by ``symbol`` or
         ``min_premium_usd``. The SDK checks this before making a request.
         """
         if symbol is None and min_premium_usd is None:
@@ -231,34 +199,6 @@ class FlowResource:
             },
         )
 
-    async def premium(
-        self,
-        symbol: str,
-        *,
-        sessions: int | None = None,
-        bucket: Literal["5m"] | None = None,
-        min_premium_usd: float | None = None,
-        dte: Literal["all", "zero", "ex_zero"] | None = None,
-        to_ms: int | None = None,
-    ) -> Result[PremiumData]:
-        """Five-minute premium for retained detected large-trade legs.
-
-        This is an app-only Pro surface and requires a current CBOE
-        attestation. Coverage is explicitly partial unless the response says
-        otherwise; missing buckets are unknown, never synthetic zeroes.
-        """
-        return await self._request(
-            "/v2/flow/premium",
-            query={
-                "symbol": symbol.upper(),
-                "sessions": sessions,
-                "bucket": bucket,
-                "min_premium_usd": min_premium_usd,
-                "dte": dte,
-                "to_ms": to_ms,
-            },
-        )
-
     async def cross_section(
         self, symbol: str, *, session: str | None = None
     ) -> Result[Any]:
@@ -266,14 +206,6 @@ class FlowResource:
             f"/v2/flow/{_symbol(symbol)}/cross-section",
             query={"session": session},
         )
-
-    async def prints(self, **options: QueryValue) -> Result[Any]:
-        """Every leg of every large trade seen on the bus this session.
-
-        In-memory and session-scoped: it starts empty each day and does not
-        backfill, so an empty ``data`` means "nothing yet today".
-        """
-        return await self._request("/v2/flow/prints", query=dict(options))
 
     async def eod(
         self,
@@ -305,21 +237,6 @@ class FlowResource:
                 "expiry": expiry,
             },
         )
-
-    async def option_tape(self, contract: str, **options: QueryValue) -> Result[Any]:
-        """One contract's trade tape. ``contract`` is an OCC symbol."""
-        return await self._request(
-            f"/v2/options/{_symbol(contract)}/tape", query=dict(options)
-        )
-
-    async def option_footprint(
-        self, contract: str, **options: QueryValue
-    ) -> Result[Any]:
-        """One contract's volume-at-price footprint, bucketed by ``tf``."""
-        return await self._request(
-            f"/v2/options/{_symbol(contract)}/footprint", query=dict(options)
-        )
-
 
 class VolResource:
     """Our own implied-vol surface, out of the greeks engine (``site.vol``).
@@ -390,36 +307,6 @@ class FundamentalsResource:
             if_none_match=if_none_match,
             timeout=timeout,
         )
-
-    async def digest(
-        self,
-        *,
-        kind: Literal["ticker", "brief"],
-        if_none_match: str | None = None,
-        timeout: float | None = None,
-        **options: QueryValue,
-    ) -> Result[Any]:
-        return await self._request(
-            "/v2/news/digest",
-            query={"kind": kind, **options},
-            if_none_match=if_none_match,
-            timeout=timeout,
-        )
-
-    async def news(
-        self,
-        *,
-        if_none_match: str | None = None,
-        timeout: float | None = None,
-        **options: QueryValue,
-    ) -> Result[Any]:
-        return await self._request(
-            "/v2/news",
-            query=options,
-            if_none_match=if_none_match,
-            timeout=timeout,
-        )
-
 
 class JournalResource:
     def __init__(self, request: Requester) -> None:
@@ -549,9 +436,6 @@ class ProtocolResource:
     def __init__(self, request: Requester) -> None:
         self._request = request
 
-    async def descriptor(self, proto: int = 3) -> Result[Any]:
-        return await self._request("/v2/ws-protocol.json", query={"proto": proto})
-
     async def websocket_schema(self) -> Result[str]:
         return await self._request("/v2/ws-protocol.proto", accept="text/plain")
 
@@ -615,13 +499,9 @@ SUPPORTED_OPERATIONS = frozenset(
     {
         "account_getClassification",
         "account_submitClassification",
-        "account_listKeys",
-        "account_createKey",
-        "account_deleteKey",
         "account_getUsage",
         "bars_getBars",
         "bars_getOptionBars",
-        "bars_getReplay",
         "chain_getChain",
         "chain_getExpirations",
         "offexchange_getActivity",
@@ -633,16 +513,8 @@ SUPPORTED_OPERATIONS = frozenset(
         "flow_getCrossSection",
         "flow_getEod",
         "flow_getLargeTrades",
-        "flow_getOptionFootprint",
-        "flow_getOptionTape",
-        "flow_getPremium",
-        "flow_getPrints",
-        "flow_getUoa",
-        "flow_getUoaEvent",
         "economy_getTreasuryYields",
         "fundamentals_getDataset",
-        "news_getNews",
-        "news_getDigest",
         "gex_getGrid",
         "gex_getHistory",
         "gex_getReference",
@@ -662,13 +534,10 @@ SUPPORTED_OPERATIONS = frozenset(
         "reference_listSymbols",
         "reference_getSymbol",
         "reference_lookupSymbol",
-        "studies_postAuthor",
-        "studies_postAuthorFeedback",
         "screener_getMovers",
         "screener_getSectors",
         "stream_createTicket",
         "stream_connectWs",
-        "stream_getProtocol",
         "stream_getWsProtocolProto",
         "stream_getRestProtocolProto",
         "vol_getContractGreeks",
@@ -680,37 +549,5 @@ SUPPORTED_OPERATIONS = frozenset(
     }
 )
 
-# Pinned operations that have no SDK method: the chat, instruments, social and
-# news-board app routes, all app-only (pin 2.20.0).
-INTENTIONALLY_UNSUPPORTED_OPERATIONS = frozenset(
-    {
-        "darkpool_getScanner",
-        "darkpool_getDataset",
-        "darkpool_getBreadth",
-        "chat_postChat",
-        "chat_postOutcome",
-        "chat_getStatus",
-        "instruments_list",
-        "instruments_get",
-        "instruments_getBars",
-        "instruments_getQuote",
-        "news_getBoard",
-        "social_shareConfig",
-        "social_getConfig",
-        "social_loadConfig",
-        "social_getFeed",
-        "social_unfollow",
-        "social_follow",
-        "social_publish",
-        "social_deletePost",
-        "social_getPost",
-        "social_getOwnProfile",
-        "social_saveOwnProfile",
-        "social_checkHandle",
-        "social_getProfile",
-        "social_getProfilePosts",
-        "social_getPosts",
-        "social_getPreview",
-        "social_putPreview",
-    }
-)
+# Pinned public operations that have no SDK method (none at pin 2.21.0).
+INTENTIONALLY_UNSUPPORTED_OPERATIONS: frozenset[str] = frozenset()

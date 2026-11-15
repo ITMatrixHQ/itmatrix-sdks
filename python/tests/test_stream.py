@@ -60,109 +60,6 @@ async def wait_for(predicate: Any) -> None:
     raise AssertionError("condition was not reached")
 
 
-class StreamTests(unittest.IsolatedAsyncioTestCase):
-    async def test_one_socket_routes_multiple_subscriptions(self) -> None:
-        tickets = 0
-        sockets: list[FakeSocket] = []
-
-        async def ticket() -> dict[str, Any]:
-            nonlocal tickets
-            tickets += 1
-            return {"ticket": f"ticket-{tickets}", "exp": 1}
-
-        async def connect(_url: str, **_options: Any) -> FakeSocket:
-            socket = FakeSocket()
-            sockets.append(socket)
-            return socket
-
-        stream = Stream(
-            url="wss://stream.test/v2/ws",
-            ticket=ticket,
-            connect=connect,
-            min_reconnect=0,
-            max_reconnect=0,
-        )
-        stocks = stream.stocks("spy")
-        spot = stream.spot("spy")
-        await stocks.start()
-        await spot.start()
-
-        stock_frame = Frame(symbol="SPY")
-        stock_frame.trade.ts_ms = 7
-        stock_frame.trade.price_scaled = 6_000_000
-        stock_frame.trade.size = 2
-        spot_frame = Frame(symbol="SPY")
-        spot_frame.spot.ts_ms = 8
-        spot_frame.spot.price_scaled = 6_000_100
-
-        stock_result = asyncio.create_task(anext(stocks))
-        await sockets[0].emit(stock_frame.SerializeToString())
-        spot_result = asyncio.create_task(anext(spot))
-        await sockets[0].emit(spot_frame.SerializeToString())
-        await sockets[0].emit(
-            json.dumps({"op": "ack", "id": stocks.id, "effective": {"symbol": "SPY"}})
-        )
-        await sockets[0].emit(json.dumps({"op": "ping", "t": 42}))
-
-        self.assertEqual((await asyncio.wait_for(stock_result, 1)).trade.ts_ms, 7)
-        self.assertEqual((await asyncio.wait_for(spot_result, 1)).spot.ts_ms, 8)
-        await wait_for(lambda: stocks.effective is not None)
-        self.assertEqual(stocks.effective, {"symbol": "SPY"})
-        self.assertEqual(tickets, 1)
-        self.assertEqual(len(sockets), 1)
-        self.assertEqual(
-            sockets[0].sent[0],
-            {
-                "op": "auth",
-                "ticket": "ticket-1",
-                "proto": 3,
-                "encoding": "protobuf",
-            },
-        )
-        await wait_for(lambda: {"op": "pong", "t": 42} in sockets[0].sent)
-
-        await stocks.aclose()
-        await spot.aclose()
-        await stream.close()
-
-    async def test_disconnect_mints_new_ticket_and_resubscribes(self) -> None:
-        tickets = 0
-        sockets: list[FakeSocket] = []
-
-        async def ticket() -> dict[str, Any]:
-            nonlocal tickets
-            tickets += 1
-            return {"ticket": f"ticket-{tickets}", "exp": 1}
-
-        async def connect(_url: str, **_options: Any) -> FakeSocket:
-            socket = FakeSocket()
-            sockets.append(socket)
-            return socket
-
-        stream = Stream(
-            url="wss://stream.test/v2/ws",
-            ticket=ticket,
-            connect=connect,
-            min_reconnect=0,
-            max_reconnect=0,
-        )
-        stocks = await stream.stocks("SPY")
-        await sockets[0].close()
-        await wait_for(lambda: len(sockets) == 2)
-        await wait_for(
-            lambda: any(message.get("op") == "sub" for message in sockets[1].sent)
-        )
-
-        frame = Frame(symbol="SPY")
-        frame.trade.ts_ms = 9
-        await sockets[1].emit(frame.SerializeToString())
-
-        self.assertEqual((await asyncio.wait_for(anext(stocks), 1)).trade.ts_ms, 9)
-        self.assertEqual(tickets, 2)
-        await stocks.aclose()
-        await stream.close()
-
-
 class OptionalDependencyTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_websockets_explains_extra(self):
         from unittest.mock import patch
@@ -193,7 +90,7 @@ _VECTORS = {
 KEYFRAME_HEX = _VECTORS["keyframe"]["frame_hex"]
 UPDATE_HEX = _VECTORS["update_1"]["frame_hex"]
 UPDATE_2_HEX = _VECTORS["update_2"]["frame_hex"]
-CLIENT = "itmatrix-python/1.2.0"
+CLIENT = "itmatrix-python/1.2.1"
 
 
 def raw(hex_value: str) -> bytes:
@@ -761,9 +658,7 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await asyncio.wait_for(anext(book), 1)).version, 7)
         self.assertEqual(minted, ["Bearer itm_test"])
 
-    async def test_other_credentials_keep_protocol_3_and_cannot_open_a_book(
-        self,
-    ) -> None:
+    async def test_other_credentials_cannot_open_a_book(self) -> None:
         sockets: list[FakeSocket] = []
         options: list[dict[str, Any]] = []
         calls = 0
@@ -778,13 +673,8 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
                 await client.stream._book_feed("SPY").start()
             self.assertEqual(caught.exception.reason, "api_key_required")
             self.assertEqual(calls, 0)
-            async with client.stream.spot("SPY"):
-                pass
-        self.assertEqual(
-            sockets[0].sent[0],
-            {"op": "auth", "ticket": "tk", "proto": 3, "encoding": "protobuf"},
-        )
-        self.assertNotIn("subprotocols", options[0])
+            self.assertFalse(hasattr(client.stream, "subscribe"))
+        self.assertEqual(sockets, [])
 
     async def test_http_429_on_the_mint_is_waited_out(self) -> None:
         sockets: list[FakeSocket] = []

@@ -106,7 +106,6 @@ describe("golden vectors", () => {
   it("decodes the keyframe as field 23 and re-encodes it byte for byte", () => {
     const value = frame(KEYFRAME);
     expect(value.symbol).toBe("SPY");
-    expect(value.gexBook).toBeUndefined();
     expect(value.gexStrikeBookUpdate).toBeUndefined();
     const book = value.gexStrikeBook!;
     const wire = KEYFRAME.frame.gex_strike_book!;
@@ -381,14 +380,9 @@ describe("GexBookTracker", () => {
     expect(Object.isFrozen(book.state)).toBe(true);
   });
 
-  it("ignores other payloads and the deprecated v1 book", () => {
+  it("ignores a frame without a book", () => {
     const book = new GexBookTracker("SPY");
-    expect(book.apply({ symbol: "SPY", spot: { tsMs: 1n, priceScaled: 1 } })).toEqual(nothing);
-    const v1 = Frame.fromPartial({
-      symbol: "SPY",
-      gexBook: { bookId: BOOK_ID, version: 1, strikes: [600_000n], gex: [1] },
-    });
-    expect(book.apply(v1)).toEqual(nothing);
-    expect(book.apply(Frame.decode(Frame.encode(v1).finish()))).toEqual(nothing);
+    expect(book.apply({ symbol: "SPY" })).toEqual(nothing);
+    expect(book.apply(Frame.decode(Frame.encode(Frame.fromPartial({ symbol: "SPY" })).finish()))).toEqual(nothing);
   });
 });

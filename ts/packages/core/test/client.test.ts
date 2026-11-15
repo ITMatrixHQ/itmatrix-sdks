@@ -13,7 +13,7 @@ describe("thin REST client", () => {
         expect(new Headers(init?.headers).get("accept")).toBe("application/json");
         return Response.json(
           { data: { spot: 600, net_gex: 12, max_abs_gex: 9, strikes: [] },
-            meta: { plane: "public" } },
+            meta: { cursor: null } },
           { headers: { "x-request-id": "req-json" } },
         );
       },
@@ -21,7 +21,7 @@ describe("thin REST client", () => {
 
     const result = await client.gex("SPY", { top: 5 });
     expect(result.data.spot).toBe(600);
-    expect(result.meta.plane).toBe("public");
+    expect(result.meta.cursor).toBeNull();
     expect(result.requestId).toBe("req-json");
   });
 
@@ -38,7 +38,6 @@ describe("thin REST client", () => {
         return new Response(body, {
           headers: {
             "content-type": "application/x-protobuf",
-            "x-itm-plane": "public",
             "x-itm-caps": '["bars"]',
           },
         });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ITMClient, restWire, type MarketDataCodec } from "../src/index.js";
 
 const binary = (body: Uint8Array) => new Response(Uint8Array.from(body).buffer, {
-  headers: { "content-type": "application/x-protobuf", "x-itm-plane": "public" },
+  headers: { "content-type": "application/x-protobuf" },
 });
 
 describe("domain model methods", () => {
@@ -104,22 +104,10 @@ describe("domain model methods", () => {
     expect(result.meta.cursor).toBe("page2");
   });
 
-  it("normalizes replay tick sources and preserves session and sequence", async () => {
-    const client = new ITMClient({ transport: "protobuf", fetch: async () => binary(
-      restWire.ReplayResponse.encode(restWire.ReplayResponse.create({ priceScale: 10000,
-        fidelity: 0, complete: true, sources: ["edgx_stocks"],
-        ticks: [{ tsMs: 1788000000000n, priceScaled: 6000000, sourceId: 0, seq: 5000000000n }],
-      })).finish(),
-    ) });
-    const result = await client.getReplay("SPY", { date: "2026-08-29" });
-    expect(result.data).toEqual({ session: "2026-08-29", fidelity: "ticks", complete: true,
-      events: [[1788000000000, 600, "edgx_stocks", 5000000000]] });
-  });
-
   it("accepts JSON fallback on a protobuf request", async () => {
     const data = { spot: null, captured_at: null, partial: false, rows: [] };
     const client = new ITMClient({ transport: "protobuf",
-      fetch: async () => Response.json({ data, meta: { plane: "db" } }) });
+      fetch: async () => Response.json({ data, meta: {} }) });
     expect((await client.getOptionChain("SPY")).data).toEqual(data);
   });
 

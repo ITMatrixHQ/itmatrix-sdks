@@ -17,7 +17,7 @@ import httpx
 from google.protobuf.message import Message
 from typing_extensions import Self
 
-from ._wire.rest_pb2 import BarsResponse, ChainResponse, GexGridResponse, ReplayResponse
+from ._wire.rest_pb2 import BarsResponse, ChainResponse, GexGridResponse
 from .config import DEFAULT_BASE_URL
 from .errors import ITMError
 from .models import Credential, GexReferenceData, QueryValue, Result, Transport
@@ -235,23 +235,6 @@ class ITMClient:
                 "cursor": cursor,
             },
             BarsResponse,
-            timeout=timeout,
-        )
-
-    async def replay(
-        self,
-        symbol: str,
-        *,
-        date: str,
-        from_: str | None = None,
-        to: str | None = None,
-        tz: str | None = None,
-        timeout: float | None = None,
-    ) -> Result[dict[str, Any] | ReplayResponse]:
-        return await self._wire(
-            f"/v2/stocks/{_symbol(symbol)}/replay",
-            {"date": date, "from": from_, "to": to, "tz": tz},
-            ReplayResponse,
             timeout=timeout,
         )
 
@@ -561,10 +544,7 @@ def _response_error(response: httpx.Response) -> ITMError:
 def _binary_meta(headers: httpx.Headers) -> Mapping[str, Any]:
     extra = _header_json(headers.get("x-itm-extra"))
     meta = dict(extra) if isinstance(extra, dict) else {}
-    plane = headers.get("x-itm-plane")
     caps = _header_json(headers.get("x-itm-caps"))
-    if plane is not None:
-        meta["plane"] = plane
     if caps is not None:
         meta["caps"] = caps
     return meta

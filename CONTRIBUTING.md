@@ -10,6 +10,6 @@ A change should include a small example and tests for its observable behavior. F
 
 Run `scripts/check.sh python` or `scripts/check.sh ts`; run `scripts/check.sh` for all packages. Use the prerequisites in each package README. Tests run against injected transports or a local HTTP server, not production. Integration tests must be explicitly configured by the operator.
 
-The pinned OpenAPI document describes both public and app-only routes. App-only methods remain entitlement-gated by the server; the SDK does not grant access. Refresh the snapshot using `scripts/fetch-spec.sh` when the API changes, inspect the diff, and update the named resource methods. Runtime responses and public protobuf fixtures take precedence where OpenAPI uses a generic schema; document such discrepancies in `docs/contract.md`.
+The pinned OpenAPI document describes the public routes an API key can call. Refresh the snapshot using `scripts/fetch-spec.sh` when the API changes, inspect the diff, and update the named resource methods. Runtime responses and public protobuf fixtures take precedence where OpenAPI uses a generic schema; document such discrepancies in `docs/contract.md`.
 
 Open a pull request with the behavior changed and the checks you ran. Never include credentials or real account or market data in reports or fixtures.

@@ -99,14 +99,6 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
             symbol="spy",
             right="call",
         )
-        premium = await client.flow.premium(
-            "spy",
-            sessions=2,
-            bucket="5m",
-            min_premium_usd=100_000,
-            dte="zero",
-            to_ms=1_790_000_000_000,
-        )
 
         self.assertEqual(calls[0].url.path, "/v2/flow/large-trades")
         self.assertEqual(calls[0].url.params["min_premium_usd"], "250000")
@@ -115,14 +107,6 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[1].url.params["session"], "2026-09-25")
         self.assertEqual(calls[1].url.params["symbol"], "SPY")
         self.assertEqual(calls[1].url.params["right"], "call")
-        self.assertEqual(calls[2].url.path, "/v2/flow/premium")
-        self.assertEqual(calls[2].url.params["symbol"], "SPY")
-        self.assertEqual(calls[2].url.params["sessions"], "2")
-        self.assertEqual(calls[2].url.params["bucket"], "5m")
-        self.assertEqual(calls[2].url.params["min_premium_usd"], "100000")
-        self.assertEqual(calls[2].url.params["dte"], "zero")
-        self.assertEqual(calls[2].url.params["to_ms"], "1790000000000")
-        self.assertEqual(premium.data, {})
 
     async def test_gex_reference_uses_exact_session_and_basis(self) -> None:
         calls: list[httpx.Request] = []

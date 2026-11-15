@@ -9,7 +9,7 @@ description: Build market-data workflows on the ITMatrixHQ API, including GEX an
 
 - **SDK first when it is installed.** Python: `itmatrix` (`itmatrix.ITMClient` sync, `itmatrix.AsyncITMClient` async). TypeScript: `ITMClient` from `@itmatrixhq/core`. The SDKs handle auth, the envelope, bounded retries, protobuf decoding and typed models. Check the installed version's README or types for signatures; this skill may outlive a package release.
 - **Direct HTTPS is fine too.** Use it when no SDK is installed, the language has none, or a named method does not cover what you need. Use `curl`, `httpx`, `fetch` or the SDK's `request("/v2/...")` escape hatch. The served `GET /v2/openapi.json` lists every operation with its parameters and schemas. `/v2/rest-protocol.proto` and `/v2/ws-protocol.proto` are the protobuf schemas.
-- **Stay on the documented public surface.** Call only the `/v2` operations that the OpenAPI document marks `x-exposure: public`. Fetching the document itself and the two `.proto` files is always fine. App-only operations refuse API keys with 403, and neither an SDK method nor a hand-built request gets around that. Never call internal, undocumented or guessed routes, and skip the pre-`/v2` aliases.
+- **Stay on the documented public surface.** Call only the `/v2` operations that the OpenAPI document marks `x-exposure: public`. Fetching the document itself and the two `.proto` files is always fine. Never call internal, undocumented or guessed routes, and skip the pre-`/v2` aliases.
 
 Take credentials from the application's configured environment and keep them out of logs and generated output.
 

@@ -1,24 +1,19 @@
 # Contract notes
 
-The OpenAPI snapshot is API contract `2.20.0`. The keyed GEX stream
-(`stream_createTicket`, `stream_connectWs`) arrived in 2.18.0, and 2.20.0 serves the
-v2 book to API Explorer and API Pro keys. Curated OPRA reads are public to API
-Explorer and API Pro keys with a non-professional classification: grouped large trades, one-symbol cross-sections, and
-persisted EOD large prints. Live raw prints, contract tape/footprints, and UOA
-evidence remain app-only. The snapshot is a reference, not endpoint
-code-generation input. Some routes reuse generic backend schemas that do not
-describe their actual response shape:
+The OpenAPI snapshot is API contract `2.21.0`, the public operations an API key
+can call. The GEX stream (`stream_createTicket`, `stream_connectWs`) serves GEX books
+to API Explorer and API Pro keys. Flow reads are available to API Explorer and API Pro
+keys with a non-professional classification: grouped large trades, one-symbol
+cross-sections, and end-of-day large prints. The snapshot is a reference, not endpoint
+code-generation input. Some routes reuse generic schemas that do not describe their
+actual response shape:
 
-`flow.premium` is also app-only: it is a first-party chart aggregate over
-retained detected large-trade legs, not a keyed public OPRA product. It requires
-site Basic or higher plus CBOE attestation and carries explicit coverage metadata. The exact
-open/preceding-close GEX reference book is public to callers with full GEX depth.
+The exact open/preceding-close GEX reference book is public to callers with full GEX depth.
 
 The Python and TypeScript off-exchange resources expose four explicit typed
 synthetic views (activity, concentration, profile, composition) and `levels`,
 which reads `/v2/darkpool/{symbol}/levels`, the one dark-pool dataset an API key
-can read. The other `/v2/darkpool` operations are app-only and have no callable
-SDK method.
+can read.
 
 - GEX grid returns an object containing spot, capture metadata and strike rows; row delta adjustment is `delta_adj`.
 - Option chain returns `{spot, captured_at, partial, rows}`, not the generic `ChainPayload` discriminated union.
@@ -49,4 +44,4 @@ SDK validates or type-checks these constraints before sending a request.
 
 ## Backend compatibility gate
 
-The SDK does not define a replacement wire protocol. REST and WS protobuf pins are byte-identical to the API 2.20.0 served at api.itmatrixhq.com, checked on 2026-11-14 (76 public operations green). Run `ITM_API_URL=https://your-api-origin bash scripts/check-contract.sh` to check drift before refreshing bindings. The check also confirms that the served WS schema has `GexStrikeBook` and `GexStrikeBookUpdate` as `Frame` fields 23 and 24 and that the stream operations are live. Set `ITM_API_KEY` as well to run a short live smoke of the keyed GEX stream. Schema differences require review with the backend; changing generated SDK bindings alone does not migrate a deployed server. Existing JSON/protobuf dev smoke covers real GEX decoding; the schema comparison also covers the WS contract, but is not an end-to-end test of every stream topic.
+The SDK does not define a replacement wire protocol. REST and WS protobuf pins are byte-identical to the API 2.21.0 served at api.itmatrixhq.com, checked on 2026-11-15 (53 operations green). Run `ITM_API_URL=https://your-api-origin bash scripts/check-contract.sh` to check drift before refreshing bindings. The check also confirms that the served WS schema has `GexStrikeBook` and `GexStrikeBookUpdate` as `Frame` fields 23 and 24 and that the stream operations are live. Set `ITM_API_KEY` as well to run a short live smoke of the keyed GEX stream. Schema differences require review with the backend; changing generated SDK bindings alone does not migrate a deployed server. The schema comparison covers the WebSocket contract but is not an end-to-end stream test.

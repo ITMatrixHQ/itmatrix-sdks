@@ -85,89 +85,6 @@ const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 const subs = (socket: FakeSocket): Control[] => socket.sent.filter((m) => m.op === "sub");
 
-describe("shared protobuf stream", () => {
-  it("uses one socket and routes frames to direct subscriptions", async () => {
-    let tickets = 0;
-    const sockets: FakeSocket[] = [];
-    const stream = new Stream({
-      url: "wss://stream.test/v2/ws",
-      ticket: async () => ({ ticket: `ticket-${++tickets}`, exp: 1 }),
-      webSocketFactory: () => {
-        const socket = new FakeSocket();
-        sockets.push(socket);
-        return socket as unknown as WebSocket;
-      },
-    });
-
-    const stocks = stream.stocks("spy");
-    const spot = stream.spot("spy");
-    await waitFor(() => sockets[0]?.sent.filter((value) => value.op === "sub").length === 2);
-
-    const socket = sockets[0]!;
-    const stockResult = stocks.next();
-    socket.frame({
-      symbol: "SPY",
-      trade: { tsMs: 7n, priceScaled: 6_000_000, size: 2 },
-    });
-    const spotResult = spot.next();
-    socket.frame({
-      symbol: "SPY",
-      spot: { tsMs: 8n, priceScaled: 6_000_100 },
-    });
-    socket.control({ op: "ack", id: stocks.id, effective: { symbol: "SPY" } });
-    socket.control({ op: "ping", t: 42 });
-
-    expect((await stockResult).value?.trade?.tsMs).toBe(7n);
-    expect((await spotResult).value?.spot?.tsMs).toBe(8n);
-    expect(stocks.effective).toEqual({ symbol: "SPY" });
-    expect(tickets).toBe(1);
-    expect(sockets).toHaveLength(1);
-    // A token credential keeps protocol 3 and offers no subprotocol.
-    expect(socket.sent[0]).toEqual({
-      op: "auth", ticket: "ticket-1", proto: 3, encoding: "protobuf",
-    });
-    expect(socket.protocols).toBeUndefined();
-    expect(socket.sent).toContainEqual({ op: "pong", t: 42 });
-
-    await stocks.return();
-    await spot.return();
-    stream.close();
-  });
-
-  it("mints a fresh ticket and resubscribes only after disconnect", async () => {
-    let tickets = 0;
-    const sockets: FakeSocket[] = [];
-    const stream = new Stream({
-      url: "wss://stream.test/v2/ws",
-      ticket: async () => ({ ticket: `ticket-${++tickets}`, exp: 1 }),
-      minReconnectMs: 0,
-      maxReconnectMs: 0,
-      webSocketFactory: () => {
-        const socket = new FakeSocket();
-        sockets.push(socket);
-        return socket as unknown as WebSocket;
-      },
-    });
-
-    const stocks = stream.stocks("SPY");
-    await waitFor(() => sockets[0]?.sent.some((value) => value.op === "sub") === true);
-    sockets[0]!.close(1006);
-    await waitFor(() => sockets[1]?.sent.some((value) => value.op === "sub") === true);
-
-    const result = stocks.next();
-    sockets[1]!.frame({
-      symbol: "SPY",
-      trade: { tsMs: 9n, priceScaled: 6_000_200, size: 1 },
-    });
-
-    expect((await result).value?.trade?.tsMs).toBe(9n);
-    expect(tickets).toBe(2);
-    expect(sockets).toHaveLength(2);
-    await stocks.return();
-    stream.close();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Keyed GEX books (v2, proto 8). The frames are the backend's golden vectors,
 // copied verbatim to test/fixtures (see gexBook.test.ts).
@@ -696,20 +613,6 @@ describe("keyed GEX book stream", () => {
     expect((await again.next()).version).toBe(7);
   });
 
-  it("does not decode the deprecated v1 book messages", async () => {
-    const h = harness();
-    const reader = new Reader(h.stream.bookFeed("SPY"));
-    const socket = await h.ready();
-    socket.bytes(encode(streamWire.Frame.fromPartial({
-      symbol: "SPY",
-      gexBook: { bookId: 1n, version: 1, strikes: [600_000n], gex: [1], crc: 0 },
-    })));
-    expect(await reader.quiet()).toBe(true);
-    expect(socket.sent.some((m) => m.op === "resync")).toBe(false);
-    socket.bytes(raw(KEYFRAME_HEX));
-    expect((await reader.next()).version).toBe(7);
-  });
-
   it("closing the stream ends the books and stops the reconnect", async () => {
     const h = harness({ minReconnectMs: 30, maxReconnectMs: 30, random: () => 1 });
     const book = h.stream.bookFeed("SPY");
@@ -775,7 +678,7 @@ describe("ITMClient stream wiring", () => {
     expect((await reader.next()).version).toBe(7);
   });
 
-  it("keeps protocol 3 for other credentials and refuses a book without minting", async () => {
+  it("refuses a book for other credentials without minting or connecting", async () => {
     for (const { client, sockets, mints } of [
       build(undefined, "session-token"),
       build("not-an-itm-key"),
@@ -783,12 +686,8 @@ describe("ITMClient stream wiring", () => {
       const error = await client.stream.bookFeed("SPY").next().catch((cause: unknown) => cause);
       expect(error).toMatchObject({ reason: "api_key_required", terminal: true });
       expect(mints).toHaveLength(0);
-      client.stream.spot("SPY");
-      await waitFor(() => sockets.length === 1 && subs(sockets[0]!).length === 1);
-      expect(sockets[0]!.sent[0]).toEqual({
-        op: "auth", ticket: "tk", proto: 3, encoding: "protobuf",
-      });
-      expect(sockets[0]!.protocols).toBeUndefined();
+      expect(sockets).toHaveLength(0);
+      expect("spot" in client.stream).toBe(false);
     }
   });
 

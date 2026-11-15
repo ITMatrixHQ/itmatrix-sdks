@@ -1,8 +1,8 @@
 """Reduce a served OpenAPI document to what this public repository may pin.
 
-The pin keeps public and app-only operations plus the three infra routes every
-client calls (/healthz, /readyz, /v2/openapi.json). It drops other internal
-operations, component schemas only those operations use, any media type other
+The pin keeps public operations plus the three infra routes every client calls
+(/healthz, /readyz, /v2/openapi.json). It drops every other operation, component
+schemas only those operations use, any media type other
 than JSON, protobuf and plain text, and sentences naming a forbidden token.
 
     python3 scripts/public-spec.py <served.json> <pinned.json>
@@ -85,7 +85,7 @@ def main(source, destination):
         item = spec["paths"][path]
         for method in list(item):
             operation = item[method]
-            if isinstance(operation, dict) and operation.get("x-exposure") == "internal" and path not in INFRA:
+            if isinstance(operation, dict) and operation.get("x-exposure") != "public" and path not in INFRA:
                 removed.append(item.pop(method))
         if not any(isinstance(op, dict) and "operationId" in op for op in item.values()):
             del spec["paths"][path]

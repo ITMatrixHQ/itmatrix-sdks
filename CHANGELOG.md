@@ -2,7 +2,17 @@
 
 Changes to the ITMatrixHQ Python and TypeScript SDKs. The two versions move together.
 
-## 1.2.0 — unreleased
+## 1.2.1 — 2026-11-15
+
+Pinned to API contract 2.21.0.
+
+Changed
+- The packages now carry only the public schema an API key uses. The WebSocket schema holds the two GEX book messages, `GexStrikeBook` and `GexStrikeBookUpdate`. The REST schema holds the bars, GEX grid, chain and off-exchange bodies.
+- Methods for in-app operations are removed: API key management (`account.list_keys`, `create_key`, `delete_key`), `flow.premium`, `flow.prints`, `flow.option_tape`, `flow.option_footprint`, `fundamentals.news` and `fundamentals.digest`, `protocol.descriptor`, and `get_replay` / `getReplay` with its models. An API key could not call any of them.
+- The stream is for API keys only. `stream.subscribe`, `stream.stocks`, `stream.spot` and `stream.chain` are removed. With any other credential `stream.gex` reports `api_key_required`.
+- `Subscription` (TypeScript `StreamSubscription`) is no longer exported.
+
+## 1.2.0 — 2026-11-15
 
 Pinned to API contract 2.20.0. Streaming GEX with an API key starts here: the 1.1.0 stream interface is replaced, and 1.1.0 should not be used for streaming.
 
@@ -21,7 +31,7 @@ Removed
 - The 1.1.0 stream interface: `stream.gex_book` and `stream.gexBook`, `GexBookSubscription`, `GexBookState` as a public type, `set_filter` and `setFilter`, the `itmatrix.filters` module and the TypeScript filter function exports.
 
 Changed
-- `stream.gex(...)` now opens a live book and needs an API key. Signed-in sessions that read raw 1.0.0 GEX frames use `stream.subscribe("gex", symbol=...)` (TypeScript `stream.subscribe("gex", { symbol })`), which is unchanged.
+- `stream.gex(...)` now opens a live book and needs an API key.
 
 ## 1.1.0 — 2026-11-14
 
@@ -43,14 +53,13 @@ Added
 - Examples: `python/examples/gex_stream.py` and `ts/examples/gex-stream.ts`.
 - Documentation: new `docs/streaming.md`, protocol versions in `docs/transport.md`, README and agent skill sections.
 
-Changed for every stream connection, including signed-in sessions
+Changed for every stream connection
 - Reconnect backoff uses full jitter, so many clients no longer retry in step.
 - The client waits 20 seconds for authentication, then gives up and retries.
 - The client sends its own ping every 20 seconds and reconnects after 40 seconds of silence.
 - A reconnect that meets a client error from the ticket request, such as a revoked key, stops and raises. It no longer retries forever. Timeouts and `429` answers are still retried. `Retry-After` is honored up to 300 seconds, and `connection_limit` waits at least 30 seconds.
 
 Unchanged
-- Signed-in sessions keep protocol 3. `stream.gex()` is unchanged.
 - Existing REST methods and models are unchanged. The additions above are new optional parameters and one new method.
 
 ## 1.0.0 — 2026-09-27

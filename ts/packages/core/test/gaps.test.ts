@@ -111,20 +111,9 @@ describe("fundamentals and news options", () => {
     expect("notModified" in result && result.notModified).toBe(true);
   });
 
-  it("revalidates news and the digest without touching the query", async () => {
-    const { client, calls } = probe(() => new Response(null, { status: 304 }));
-    await client.fundamentals.news({ symbols: "SPY" }, { ifNoneMatch: '"n1"' });
-    await client.fundamentals.newsDigest({ kind: "brief" }, { ifNoneMatch: '"d1"' });
-    expect(calls[0]!.url.searchParams.get("symbols")).toBe("SPY");
-    expect(new Headers(calls[0]!.init?.headers).get("if-none-match")).toBe('"n1"');
-    expect(calls[1]!.url.searchParams.get("kind")).toBe("brief");
-    expect(new Headers(calls[1]!.init?.headers).get("if-none-match")).toBe('"d1"');
-    expect(calls[1]!.url.searchParams.has("ifNoneMatch")).toBe(false);
-  });
-
   it("sends no conditional header when none was asked for", async () => {
     const { client, calls } = probe(() => envelope([]));
-    await client.fundamentals.news();
+    await client.fundamentals.get("AAPL", "ratios");
     expect(new Headers(calls[0]!.init?.headers).has("if-none-match")).toBe(false);
   });
 });
