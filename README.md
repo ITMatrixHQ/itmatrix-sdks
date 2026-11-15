@@ -53,22 +53,19 @@ Python and TypeScript's friendly market-data methods normalize JSON and protobuf
 
 ## Streaming GEX with an API key
 
-API Explorer and API Pro keys can stream live GEX over WebSocket with SDK 1.1.0 or later (`pip install -U "itmatrix[stream]"`, `npm i @itmatrixhq/core@latest`). The book updates about every 5 seconds today. The stream uses protobuf frames, a keyframe plus update model and the `itmatrixhq.v1` subprotocol, all of which the SDK handles. Explorer allows 5 connections and 25 subscriptions. Pro allows 100 connections and 1,000 subscriptions. Each connection holds up to 50.
+API Explorer and API Pro keys can stream live GEX over WebSocket with SDK 1.2.0 or later (`pip install -U "itmatrix[stream]"`, `npm i @itmatrixhq/core@latest`). `client.stream.gex(symbol)` returns a live book that connects in the background and always holds the newest book. Read `latest`, or register handlers. The book updates about every 5 seconds today.
 
 ```python
-async with itm.AsyncITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
-    async with client.stream.gex_book("SPY", filter=filters.nearest(20)) as book:
-        async for state in book:
-            print(state.net_gex, state.flip_point, state.strikes, state.gex)
+spy = client.stream.gex("SPY", nearest=20)   # AsyncITMClient
+spy.on("update", lambda book: print(book.spot, book.net_gex, book.flip))
 ```
 
 ```ts
-for await (const state of client.stream.gexBook("SPY", { filter: nearest(20) })) {
-  console.log(state.netGex, state.flipPoint, state.strikes, state.gex);
-}
+const spy = client.stream.gex("SPY", { nearest: 20 });
+spy.on("update", (book) => console.log(book.spot, book.netGex, book.flip));
 ```
 
-Each strike carries call and put GEX, and `gex` is their sum. The filter picks among the book's 120 strikes, which are ranked by gross GEX, so `nearest(20)` can have gaps.
+Each row of a book has `strike`, `call`, `put` and `total`. Delivery is conflated: a slow handler gets the newest book, never a backlog. Explorer allows 5 connections and 25 symbols. Pro allows 100 connections and 1,000 symbols. Each connection holds up to 50.
 
 The stream requires the ITMatrixHQ SDK protocol. The server cannot prove that the SDK was used, and the requirement is not a security control. See [streaming](docs/streaming.md) for the protocol, limits, reconnect rules and close reasons.
 

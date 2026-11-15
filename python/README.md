@@ -142,46 +142,78 @@ asyncio.run(main())
 
 Subscriptions live on `AsyncITMClient.stream`; they are bounded async iterators of
 public protobuf frames. See the [streaming guide](../docs/streaming.md) and the
-`stream.gex(symbol)` / `stream.spot(symbol)` helpers. Close subscriptions with
+`stream.subscribe(...)` / `stream.spot(symbol)` helpers. Close subscriptions with
 `async with` or `aclose()`, and close the client with `async with` or `aclose()`. Falling behind the configured
 queue limit raises an error rather than silently discarding market updates.
 
-### GEX book (API key)
+### Live GEX book (API key)
+
+A live book is an object that keeps the newest GEX book for one symbol and calls
+your handlers when it changes. You do not run a loop.
 
 ```python
-from itmatrix import filters
+import asyncio, os
+import itmatrix as itm
 
-async with itm.AsyncITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
-    async with client.stream.gex_book("SPY", filter=filters.nearest(20)) as book:
-        async for state in book:
-            print(state.version, state.spot, state.net_gex, state.flip_point)
+def show(book: itm.Book) -> None:
+    print(book.symbol, book.spot, book.net_gex, book.flip)
+    for row in book:                       # rows in strike order
+        print(row.strike, row.call, row.put, row.total)
+
+async def main() -> None:
+    async with itm.AsyncITMClient(api_key=os.environ["ITM_API_KEY"]) as client:
+        spy = client.stream.gex("SPY", nearest=20)
+        spy.on("update", show)
+        spy.on("status", lambda status: print("status:", status))
+        spy.on("error", lambda error: print("error:", error))
+        await client.run()                 # until every book closes, Ctrl-C closes them
+
+asyncio.run(main())
 ```
 
-`gex_book(symbol)` needs an `itm_` API key on API Explorer or API Pro and
-`pip install -U "itmatrix[stream]"` (SDK 1.1.0 or later). It yields a read-only
-`itm.GexBookState` after every applied keyframe or update: `symbol`, `captured_at`
-(UTC), `book_id`, `version`, `spot`, `net_gex` (the whole-chain total), `flip_point`
-(or `None`), `strikes` in dollars with the exact `strikes_thousandths`, `call_gex`
-and `put_gex` per strike, `gex` (call plus put), `changed` (the indices the latest
-frame updated) and `reason` (why a keyframe was sent, `None` for an update). The
-book carries no open interest.
+`client.stream.gex(symbol)` needs an `itm_` API key on API Explorer or API Pro and
+`pip install -U "itmatrix[stream]"` (SDK 1.2.0 or later). It returns at once and
+connects in the background. Every live book on a client shares one connection.
 
-The book holds the 120 strikes with the largest gross GEX (`|call| + |put|`). The
-filters in `itmatrix.filters` (`nearest(n)`, `within_pct(p)`, `between(lo, hi)`,
-`top(n, by=...)` and `all()`) pick among those strikes. Swap the filter on a live
-book with `book.set_filter(filters.within_pct(0.02))`. The book updates about every
-5 seconds today.
+| Event | Fires when | Handler receives |
+|---|---|---|
+| `update` | A new book is ready, and right after `update(...)` changes the filter | an `itm.Book` |
+| `status` | The connection state changes | `"connecting"`, `"live"`, `"reconnecting"` or `"closed"` |
+| `error` | A handler raised, or the stream hit a problem | the exception (`itm.StreamError` for stream refusals) |
 
-The client keeps the book correct. It checks each keyframe's CRC, applies an update only when the version is
-exactly one ahead and the CRC matches, ignores duplicates, and asks the server for a
-fresh keyframe on any gap or mismatch. It mints a fresh ticket for every connection,
-waits out `Retry-After`, backs off with jitter, resubscribes after a reconnect and
-pings the server every 20 seconds. One client is one connection. A refusal that
-retrying cannot fix (`stream_preview`, `client_outdated`, `proto_required`, `protobuf_required`)
-raises `itm.StreamError` (an `itm.ITMError`) from the loop, with the server's
-`reason` and `terminal`.
-`stream.gex()` still returns raw frames for signed-in sessions. See
-`examples/gex_stream.py` and the [streaming guide](../docs/streaming.md).
+On `AsyncITMClient` a plain handler runs inline on the event loop, so keep it quick.
+An `async def` handler runs as a task, one call at a time. Delivery is conflated: a
+busy handler is next called with the newest book, never a backlog. A handler that
+raises goes to `error` and never stops the stream.
+
+Besides handlers: `spy.latest` is the newest book (read it any time), `spy.age` its
+age in seconds, `await spy.ready()` the first book, `await spy.changed()` the next
+one and `async for book in spy` iterates conflated books. `spy.update(within=0.05)`
+changes the filter and `spy.close()` ends the book. `await client.run()` returns
+when every live book has closed. Ctrl-C closes them and returns without a traceback.
+
+A book has `symbol`, `spot`, `net_gex` (the whole-chain total), `flip` (or `None`),
+`time` (UTC), `age` and rows of `itm.GexRow(strike, call, put, total)`. `get(600)`
+finds one strike, `strikes`, `calls`, `puts` and `totals` are columns, and `df()`
+returns a pandas DataFrame. `meta` holds `book_id`, `version`, `changed` (the strikes
+that moved) and `reason`. The book holds the 120 strikes with the largest gross GEX
+and carries no open interest.
+
+Filters are keyword arguments: `nearest=n`, `within=0.02` (2% of spot) or
+`between=(590, 610)`, optionally with `top=n` and `by="gross"`, `"net"`, `"call"` or
+`"put"`. They choose among the book's 120 strikes, so `nearest=20` can have gaps.
+
+The blocking `itm.ITMClient` has the same `client.stream.gex(...)` and `client.run()`.
+Its `ready(timeout)` and `changed(timeout)` block. Its handlers run one at a time on
+the book's own thread (`itmatrix-gex-handlers`), or on an executor you pass with
+`spy.on("update", fn, executor=pool)`, and never on the network thread.
+
+The SDK keeps the book correct. It checks a CRC on every frame, asks for a fresh
+keyframe on any gap, backs off with jitter and resubscribes after a reconnect. A
+refusal it cannot retry is an `error` with `terminal` set, then the book closes.
+Signed-in sessions keep raw frames through `stream.subscribe("gex", symbol=...)`.
+Recipes (flip alerts, many symbols, web handlers, pandas, reconnects, async I/O) are
+in the [streaming guide](../docs/streaming.md#recipes). See also `examples/gex_stream.py`.
 
 ## Client lifecycle
 

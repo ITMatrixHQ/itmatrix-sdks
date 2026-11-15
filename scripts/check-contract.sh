@@ -167,19 +167,20 @@ async def main(base_url: str) -> None:
     async with itm.AsyncITMClient(
         api_key=os.environ["ITM_API_KEY"], base_url=base_url
     ) as client:
-        async with client.stream.gex_book("SPY") as book:
-            keyframe = await asyncio.wait_for(book.__anext__(), 10)
-            assert keyframe.reason is not None, "first frame was not a keyframe"
-            assert len(keyframe.strikes) > 0, "keyframe has no strikes"
-            print(
-                f"keyframe ok: version {keyframe.version}, "
-                f"{len(keyframe.strikes)} strikes, reason {keyframe.reason}"
-            )
-            # Updates arrive about every 5 s while the market is open. The
-            # window allows a slow engine tick or a keyframe-sized change.
-            following = await asyncio.wait_for(book.__anext__(), 30)
-            kind = "update" if following.reason is None else "keyframe"
-            print(f"{kind} ok: version {following.version}, {len(following.changed)} changed")
+        spy = client.stream.gex("SPY")
+        keyframe = await spy.ready(10)
+        assert keyframe.meta.reason is not None, "first book was not a keyframe"
+        assert len(keyframe) > 0, "keyframe has no strikes"
+        print(
+            f"keyframe ok: version {keyframe.meta.version}, "
+            f"{len(keyframe)} strikes, reason {keyframe.meta.reason}, age {keyframe.age:.1f}s"
+        )
+        # Updates arrive about every 5 s while the market is open. The
+        # window allows a slow engine tick or a keyframe-sized change.
+        following = await spy.changed(30)
+        kind = "update" if following.meta.reason is None else "keyframe"
+        print(f"{kind} ok: version {following.meta.version}, {len(following.meta.changed)} changed")
+        await spy.aclose()
 
 
 try:

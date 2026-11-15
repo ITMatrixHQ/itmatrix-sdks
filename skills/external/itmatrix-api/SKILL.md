@@ -48,14 +48,16 @@ Take credentials from the application's configured environment and keep them out
 
 Python streams use `AsyncITMClient`. TypeScript streams use `client.stream`. Keep one shared connection and a bounded set of subscriptions, and close them through their lifecycle methods. A ticket authorizes one connection handshake: mint a new ticket for a real reconnect, not because a healthy connection's ticket expired. Treat a backpressure error as data loss that needs an explicit recovery decision.
 
-### GEX book stream for API keys
+### Live GEX book for API keys
 
-SDK 1.1.0 adds a GEX stream for `itm_` keys on API Explorer and API Pro. If key streaming is switched off for the account, the key gets `not_entitled_tier` with the reason `stream_preview`. Do not retry that error. Check that the installed SDK is 1.1.0 or later before using it.
+SDK 1.2.0 streams GEX to `itm_` keys on API Explorer and API Pro. If key streaming is switched off for the account, the key gets `not_entitled_tier` with the reason `stream_preview`. Do not retry that error. Check that the installed SDK is 1.2.0 or later before using it.
 
-- Python: `async with client.stream.gex_book("SPY") as book: async for state in book:`. TypeScript: `for await (const state of client.stream.gexBook("SPY"))`. Each `state` is a `GexBookState` with `strikes`, `call_gex`, `put_gex`, `gex` (call plus put), `net_gex`, `flip_point` (nullable) and `spot`. The book holds the 120 strikes with the largest gross GEX and updates about every 5 seconds. Pass a filter such as `nearest(20)` to choose strikes. Keep a null `flip_point` as null.
+- `spy = client.stream.gex("SPY", nearest=20)` (TypeScript `client.stream.gex("SPY", { nearest: 20 })`) returns a live book at once. Lead with handlers: `spy.on("update", fn)` gets each new book, `spy.on("status", fn)` gets `connecting`, `live`, `reconnecting` or `closed`, and `spy.on("error", fn)` gets errors. End the script with `await client.run()`, which returns when every live book has closed (Python closes them on Ctrl-C, TypeScript needs `process.on("SIGINT", () => client.close())`). Read `spy.latest` when you need the newest book on demand, and `await spy.changed()` to wait for the next. Do not poll `latest` in a loop.
+- Handlers are conflated: a busy handler is next called with the newest book, never a backlog. A handler that raises goes to `error` and never stops the stream. On Python `AsyncITMClient` keep plain handlers quick or make them `async def`. On the blocking `ITMClient` handlers run on the book's own thread or an executor you pass.
+- A book iterates rows with `strike`, `call`, `put` and `total`, and has `spot`, `net_gex` (`netGex`), `flip` (nullable) and `time`. Keep a null `flip` as null. The book holds the 120 strikes with the largest gross GEX and updates about every 5 seconds. Delivery is conflated: you get the newest book, never a backlog.
 - The stream carries `gex` only. Spot, stocks, index, chain and market topics are refused for keys, and so are index symbols.
-- One SDK client is one connection. Subscribe once per symbol and keep it open. Limits are per account: Explorer 5 connections and 25 subscriptions, Pro 100 and 1,000, and 50 subscriptions per connection. The server refuses over a limit and never evicts.
-- Let the SDK reconnect. Do not add your own retry loop around it. `stream_preview`, `client_outdated`, `client_required`, `proto_required` and `protobuf_required` are terminal. `connection_limit` needs at least 30 seconds of backoff.
+- One SDK client is one connection. Open one live book per symbol and keep it open. Limits are per account: Explorer 5 connections and 25 symbols, Pro 100 and 1,000, and 50 per connection. The server refuses over a limit and never evicts.
+- Let the SDK reconnect. Do not add your own retry loop around it. `stream_preview`, `client_outdated`, `client_required`, `proto_required` and `protobuf_required` arrive as an `error` event and close the book. `connection_limit` needs at least 30 seconds of backoff.
 - The stream requires the SDK protocol: protobuf, the `itmatrixhq.v1` subprotocol and a client name. The server cannot verify the SDK was used. Do not present this as a security control. Details: `docs/streaming.md`.
 
 ## Minimal examples

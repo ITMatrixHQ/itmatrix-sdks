@@ -1,7 +1,8 @@
 import type { Frame } from "./_wire/ws.js";
 import { ITMError, type ErrorCode } from "./errors.js";
-import { all, type GexBookFilter } from "./filters.js";
+import type { GexFilter } from "./filters.js";
 import { GexBookTracker, type GexBookState } from "./gexBook.js";
+import { LiveGex } from "./live.js";
 import { CLIENT_NAME } from "./version.js";
 
 /**
@@ -20,7 +21,7 @@ export type Topic = "stocks" | "spot" | "index" | "chain" | "gex";
 
 /**
  * An `itm_` API key connects with protocol 8, the `itmatrixhq.v1`
- * subprotocol and a declared client name, and may subscribe to `gex` books.
+ * subprotocol and a declared client name, and may open live GEX books.
  * Protocol 8 carries the v2 book (`GexStrikeBook`); the server refuses a keyed
  * auth at 7 with `proto_required`. Any other credential keeps the 1.0.0
  * protocol.
@@ -245,6 +246,9 @@ abstract class Subscription<T> implements AsyncIterableIterator<T> {
   /** Called each time the connection is (re)established, before `sub` is sent. */
   onConnect(): void {}
 
+  /** Called when the connection drops and a reconnect follows. */
+  onDisconnect(): void {}
+
   fail(error: unknown): void {
     this.active = false;
     this.queue.fail(error);
@@ -277,88 +281,72 @@ export class StreamSubscription extends Subscription<Frame> {
   }
 }
 
-/** Options for {@link Stream.gexBook}. */
-export interface GexBookOptions {
-  /**
-   * Which strikes each yielded view holds, for example `nearest(20)`. Default
-   * `all()`. Swap it later with {@link GexBookSubscription.setFilter}.
-   */
-  filter?: GexBookFilter;
-}
-
 /**
- * A reconstructed GEX book. Iterating yields the book after every applied
- * keyframe or update, passed through the subscription's filter.
- * `close()` (or leaving a `for await` loop) ends it. A refusal that retrying
- * cannot fix rejects the iterator with a {@link StreamError}.
+ * One symbol's reconstructed GEX book on the shared connection. With an owner
+ * (a {@link LiveGex}) every applied state, failure and connection change goes
+ * to the owner. Without one it is an async iterator of states, which the
+ * transport tests use.
+ * @internal
  */
-export class GexBookSubscription extends Subscription<GexBookState> {
+export class BookFeed extends Subscription<GexBookState> {
   private readonly book: GexBookTracker;
-  private currentFilter: GexBookFilter;
 
   constructor(
     id: string,
     options: SubscribeOptions,
     maximum: number,
-    private readonly requestResync: (subscription: GexBookSubscription) => void,
-    private readonly stop: (subscription: GexBookSubscription) => void,
-    filter: GexBookFilter = all(),
+    private readonly requestResync: (subscription: BookFeed) => void,
+    private readonly stop: (subscription: BookFeed) => void,
+    private readonly owner?: LiveGex,
   ) {
     super(id, "gex", options, maximum);
     this.book = new GexBookTracker(options.symbol);
-    this.currentFilter = checkFilter(filter);
   }
 
-  /** The filter applied to every yielded view. */
-  get filter(): GexBookFilter {
-    return this.currentFilter;
-  }
-
-  /** The latest full book, before the filter, or `undefined` before a keyframe. */
+  /** The latest full book, or `undefined` before a keyframe. */
   get state(): GexBookState | undefined {
     return this.book.state;
   }
 
-  /**
-   * Swap the filter on the live subscription. Nothing is sent to the server.
-   * When a book is already held, the current book is yielded at once through
-   * the new filter, with every strike in the view marked as changed. Later
-   * frames use the new filter.
-   */
-  setFilter(filter: GexBookFilter): void {
-    this.currentFilter = checkFilter(filter);
-    const state = this.book.state;
-    if (!this.active || state === undefined) return;
-    const view = filter(state);
-    this.queue.push(Object.freeze({
-      ...view,
-      changed: Uint32Array.from({ length: view.strikes.length }, (_, i) => i),
-    }));
+  get symbol(): string {
+    return this.options.symbol;
   }
 
   protected detach(): void {
     this.stop(this);
   }
 
-  /** The underlying this book follows. */
-  get symbol(): string {
-    return this.options.symbol;
-  }
-
   feed(frame: Frame): void {
     if (!this.active || frame.symbol !== this.options.symbol) return;
     const { state, resync } = this.book.apply(frame);
     if (resync) this.requestResync(this);
-    if (state !== undefined) this.queue.push(this.currentFilter(state));
+    if (state === undefined) return;
+    if (this.owner !== undefined) this.owner.publish(state);
+    else this.queue.push(state);
   }
 
   onConnect(): void {
     // A new connection starts with a keyframe. Nothing before it applies.
     this.book.reset();
+    this.owner?.connected();
+  }
+
+  onDisconnect(): void {
+    this.owner?.disconnected();
+  }
+
+  fail(error: unknown): void {
+    super.fail(error);
+    this.owner?.fail(error);
+  }
+
+  finish(): void {
+    super.finish();
+    this.owner?.finish(undefined);
   }
 }
 
-type AnySubscription = StreamSubscription | GexBookSubscription;
+type AnySubscription = StreamSubscription | BookFeed;
 
 /** One WebSocket and what is known about it. */
 interface Connection {
@@ -376,6 +364,9 @@ interface Connection {
 
 export class Stream {
   private readonly subscriptions = new Map<string, AnySubscription>();
+  /** Open live books, and the resolvers of `run()` calls waiting for none. */
+  private readonly live = new Set<LiveGex>();
+  private idleWaiters: Array<() => void> = [];
   private readonly factory: (url: string, protocols?: string[]) => WebSocket;
   private readonly maxQueue: number;
   private readonly minDelayMs: number;
@@ -445,38 +436,77 @@ export class Stream {
     return this.subscribe("spot", { symbol });
   }
 
-  gex(symbol: string, options: Omit<SubscribeOptions, "symbol"> = {}):
-    StreamSubscription {
-    return this.subscribe("gex", { ...options, symbol });
+  /**
+   * The live GEX book of one symbol. Requires an `itm_` API key.
+   *
+   * Returns at once and connects in the background. `latest` holds the newest
+   * {@link Book}, `on("update", fn)` calls `fn` with each new one, and
+   * `await live.changed()` waits for the next. Filters: `{ nearest: 20 }`,
+   * `{ within: 0.05 }` (5% of spot) or `{ between: [590, 610] }`, optionally
+   * with `top` and `by`. Change them later with `live.update(...)`. Each symbol
+   * is its own object, and every object on a client shares one connection.
+   *
+   * Token sessions use `subscribe("gex", { symbol })` for the 1.0.0 frames.
+   */
+  gex(symbol: string, options: GexFilter = {}): LiveGex {
+    if (typeof symbol !== "string") {
+      throw new TypeError("pass one symbol; open one live book per symbol");
+    }
+    const name = symbol.trim().toUpperCase();
+    if (!name) throw new TypeError("symbol is required");
+    return new LiveGex(name, options, (live) => {
+      const feed = this.bookFeed(name, live, false);
+      this.live.add(live);
+      return {
+        get state() { return feed.state; },
+        start: () => this.startFeed(feed),
+        close: () => feed.close(),
+        released: () => this.liveDone(live),
+      };
+    });
   }
 
   /**
-   * Stream a live GEX book for one underlying. Requires an `itm_` API key.
-   *
-   * `for await (const state of stream.gexBook("SPY"))` yields a
-   * {@link GexBookState} after every applied keyframe or update. Pass
-   * `{ filter: nearest(20) }` (or another filter) to receive only those
-   * strikes, and swap it later with `setFilter`. The SDK keeps
-   * the book correct: it checks versions and the CRC, asks for a fresh keyframe
-   * when they disagree, and reconnects with the backoff the service asks for.
-   * Terminal refusals reject the iterator with a {@link StreamError}.
+   * Resolves when every live book on this stream has closed, at once when
+   * none is open. `client.run()` is the usual way to call it.
    */
-  gexBook(symbol: string, options: GexBookOptions = {}): GexBookSubscription {
+  run(): Promise<void> {
+    if (this.live.size === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => { this.idleWaiters.push(resolve); });
+  }
+
+  private liveDone(live: LiveGex): void {
+    this.live.delete(live);
+    if (this.live.size > 0) return;
+    const waiters = this.idleWaiters;
+    this.idleWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
+  /**
+   * A bare book subscription, an async iterator of states. For tests.
+   * @internal
+   */
+  bookFeed(symbol: string, owner?: LiveGex, start = true): BookFeed {
     if (!symbol) throw new TypeError("symbol is required");
-    const subscription: GexBookSubscription = new GexBookSubscription(
+    const feed: BookFeed = new BookFeed(
       this.newId(),
       { symbol: symbol.toUpperCase() },
       this.maxQueue,
       (value) => this.requestResync(value),
       (value) => this.remove(value),
-      options.filter,
+      owner,
     );
+    if (start) this.startFeed(feed);
+    return feed;
+  }
+
+  private startFeed(feed: BookFeed): void {
     if (this.connection !== undefined && !this.connection.keyed) {
-      subscription.fail(notAKey());
-      return subscription;
+      feed.fail(notAKey());
+      return;
     }
-    this.add(subscription);
-    return subscription;
+    this.add(feed);
   }
 
   chain(symbol: string, options: Omit<SubscribeOptions, "symbol"> = {}):
@@ -642,7 +672,7 @@ export class Stream {
     const keyed = await this.usesKey();
     if (!keyed) {
       for (const subscription of [...this.subscriptions.values()]) {
-        if (subscription instanceof GexBookSubscription) {
+        if (subscription instanceof BookFeed) {
           this.subscriptions.delete(subscription.id);
           subscription.fail(notAKey());
         }
@@ -868,7 +898,10 @@ export class Stream {
   /** The connection is over. Drop it and, if anyone is listening, reconnect. */
   private lost(connection: Connection, code: number, reason: string): void {
     this.teardown(connection, code, reason);
-    if (!this.closed && this.subscriptions.size > 0) this.startLoop(false);
+    if (!this.closed && this.subscriptions.size > 0) {
+      for (const subscription of [...this.subscriptions.values()]) subscription.onDisconnect();
+      this.startLoop(false);
+    }
   }
 
   private teardown(connection: Connection, code: number, reason: string): void {
@@ -916,7 +949,7 @@ export class Stream {
   }
 
   /** Ask for a fresh keyframe, at most once per interval per subscription. */
-  private requestResync(subscription: GexBookSubscription): void {
+  private requestResync(subscription: BookFeed): void {
     const now = performance.now();
     const last = this.resyncSent.get(subscription.id);
     if (last !== undefined && now - last < this.resyncIntervalMs) return;
@@ -942,20 +975,12 @@ function matches(subscription: StreamSubscription, frame: Frame): boolean {
   }
 }
 
-function checkFilter(filter: GexBookFilter | undefined): GexBookFilter {
-  if (filter === undefined) return all();
-  if (typeof filter !== "function") {
-    throw new TypeError("filter must be a function such as nearest(20)");
-  }
-  return filter;
-}
-
 function notAKey(): StreamError {
   return new StreamError({
     code: "invalid_params",
     reason: "api_key_required",
     terminal: true,
-    message: "gexBook needs an itm_ API key; token sessions use stream.gex()",
+    message: 'live GEX books need an itm_ API key; token sessions use stream.subscribe("gex", { symbol })',
   });
 }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import contextvars
 import sys
@@ -24,6 +25,7 @@ from typing_extensions import Self, Unpack
 from ._core.client import ITMClient as _TransportClient
 from ._core.client import _credential
 from ._core.config import DEFAULT_BASE_URL
+from ._core.live import SyncLiveGex, _ThreadDispatch
 from ._core.models import (
     Credential,
     GexHistoryData,
@@ -54,14 +56,30 @@ class AsyncITMClient(_TransportClient):
     unclosed emits ``ResourceWarning``; async cleanup cannot run from a
     finalizer, so close it explicitly.
 
-    ``stream.gex_book(symbol)`` needs an ``itm_`` API key. Such a client connects
-    with the keyed stream protocol; any other credential keeps protocol 3.
+    ``stream.gex("SPY", nearest=20)`` opens a live GEX book and needs an ``itm_``
+    API key. Such a client connects with the keyed stream protocol. Any other
+    credential keeps protocol 3.
     """
 
     @wraps(_TransportClient.__init__)
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.stream._key_auth = self._uses_api_key
+
+    async def run(self) -> None:
+        """Run until every live book on this client has closed.
+
+        The usual last line of a streaming script::
+
+            spy = client.stream.gex("SPY", nearest=20)
+            spy.on("update", show)
+            await client.run()
+
+        Returns at once when no live book is open. Ctrl-C closes every live
+        book and returns normally, so the script exits without a traceback.
+        Cancelling it closes every live book and re-raises.
+        """
+        await self.stream.run()
 
     async def _uses_api_key(self) -> bool:
         credential = await _credential(self._credential)
@@ -237,6 +255,58 @@ class _BlockingResource:
         return call
 
 
+class _SyncStream:
+    """The blocking client's streams: live GEX books."""
+
+    def __init__(self, client: ITMClient) -> None:
+        self._client = client
+
+    def gex(
+        self,
+        symbol: str,
+        *,
+        nearest: int | None = None,
+        within: float | None = None,
+        between: tuple[float, float] | None = None,
+        top: int | None = None,
+        by: str | None = None,
+    ) -> SyncLiveGex:
+        """The live GEX book of one symbol. Requires an ``itm_`` API key.
+
+        Returns at once and connects on the client's background loop. Read
+        ``latest`` any time, or block with ``ready()`` and ``changed()``.
+        Handlers registered with ``on(...)`` run on the book's own handler
+        thread, or on an ``executor`` you pass. See :class:`SyncLiveGex`.
+        """
+        options = {"nearest": nearest, "within": within, "between": between, "top": top, "by": by}
+        runtime = self._client._runtime
+        if runtime.closed:
+            raise RuntimeError(_CLOSED)
+        dispatch = _ThreadDispatch()
+        try:
+            (live,) = runtime.portal.call(
+                lambda: (runtime.client.stream._live_gex(symbol, options, dispatch),)
+            )
+        except BaseException:
+            dispatch.close()
+            raise
+        return SyncLiveGex(runtime.portal, live, dispatch)
+
+
+async def _wait_idle(stream: Any) -> None:
+    """Wait on the client loop until no live book is open (no signal handling:
+    the blocking client handles Ctrl-C on the caller's thread)."""
+    if not stream._live:
+        return
+    idle = asyncio.get_running_loop().create_future()
+    stream._idle.append(idle)
+    try:
+        await idle
+    finally:
+        if idle in stream._idle:
+            stream._idle.remove(idle)
+
+
 class _Resource:
     """Build the blocking view of a grouped resource on access.
 
@@ -344,7 +414,7 @@ class ITMClient:
     raises ``RuntimeError``. A client you never close is closed when it is
     garbage-collected or when the interpreter exits, and it never keeps the
     process alive. Sync calls are serialized; use AsyncITMClient for
-    concurrent requests and subscriptions. HTTP clients injected via
+    concurrent requests. ``client.stream.gex(...)`` opens a live GEX book. HTTP clients injected via
     http_client are not accepted; use http_transport for testing. The
     credential callback also executes on the owned loop.
     """
@@ -394,6 +464,11 @@ class ITMClient:
         return self._runtime.client.base_url
 
     @property
+    def stream(self) -> _SyncStream:
+        """Live data: ``client.stream.gex("SPY", nearest=20)``."""
+        return _SyncStream(self)
+
+    @property
     def closed(self) -> bool:
         """True once ``close()`` has run (or the client was finalized)."""
         return self._runtime.closed
@@ -410,6 +485,31 @@ class ITMClient:
         """Release the HTTP pool and background loop now. Idempotent."""
         self._finalizer.detach()
         self._runtime.close()
+
+    def run(self) -> None:
+        """Block until every live book on this client has closed.
+
+        Returns at once when no live book is open. Ctrl-C closes every live
+        book and returns normally. Handlers keep running on their own threads
+        while this blocks.
+        """
+        runtime = self._runtime
+        if runtime.closed:
+            return
+        stream = runtime.client.stream
+        done = runtime.portal.start_task_soon(_wait_idle, stream)
+        try:
+            while True:
+                try:
+                    done.result(timeout=0.25)  # short waits keep Ctrl-C responsive
+                    return
+                except FutureTimeout:
+                    continue
+        except KeyboardInterrupt:
+            with contextlib.suppress(RuntimeError):
+                runtime.portal.call(stream._close_live)
+            with contextlib.suppress(Exception):
+                done.result(timeout=5)
 
     def _call(self, method: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         return self._runtime.call(method, *args, **kwargs)

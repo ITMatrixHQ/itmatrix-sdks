@@ -148,49 +148,63 @@ inject its own separately distributed codec through `new ITMClient({ codec })`.
 Only normalized `get…` methods use this seam. The public distribution contains
 JSON and public protobuf support; it contains no site-specific codec implementation.
 
-### GEX book (API key)
+### Live GEX book (API key)
+
+A live book is an object that keeps the newest GEX book for one symbol and calls
+your handlers when it changes. You do not run a loop.
 
 ```ts
-import { ITMClient, nearest } from "@itmatrixhq/core";
+import { ITMClient } from "@itmatrixhq/core";
 
 const client = new ITMClient({ apiKey: process.env.ITM_API_KEY });
-for await (const state of client.stream.gexBook("SPY", { filter: nearest(20) })) {
-  console.log(state.version, state.spot, state.netGex, state.flipPoint);
-}
-client.close();
+const spy = client.stream.gex("SPY", { nearest: 20 });
+spy.on("update", (book) => {
+  console.log(book.symbol, book.spot, book.netGex, book.flip);
+  for (const row of book) console.log(row.strike, row.call, row.put, row.total);
+});
+spy.on("status", (status) => console.log("status:", status));
+spy.on("error", (error) => console.error("error:", error));
+process.on("SIGINT", () => client.close());
+await client.run();                        // resolves when every book has closed
 ```
 
-`gexBook(symbol)` needs an `itm_` API key on API Explorer or API Pro and SDK 1.1.0
-or later (`npm i @itmatrixhq/core@latest`). It yields a readonly `GexBookState` after
-every applied keyframe or update: `symbol`, `capturedAt`, `bookId` (a `bigint`),
-`version`, `spot`, `netGex` (the whole-chain total), `flipPoint` (or `null`), `strikes`
-in dollars as a `Float64Array` with the exact `strikesThousandths`, `callGex` (>= 0)
-and `putGex` (<= 0) as `Float32Array`, `gex` (call plus put, a `Float64Array`),
-`changed` (the indices the latest frame updated) and `reason` (why a keyframe was
-sent, `null` for an update). Each state owns its arrays. The book carries no open
-interest.
+`client.stream.gex(symbol)` needs an `itm_` API key on API Explorer or API Pro and
+SDK 1.2.0 or later (`npm i @itmatrixhq/core@latest`). It returns at once and connects
+in the background. Every live book on a client shares one connection.
 
-The book holds the 120 strikes with the largest gross GEX (`|call| + |put|`). The
-filters `nearest(n)`, `withinPct(p)`, `between(lo, hi)`, `top(n, by)` (`"gross"`,
-`"net"`, `"call"` or `"put"`) and `all()` pick among those strikes and keep the header.
-They are pure functions you can also call on any state. Because they choose among the
-book's members, `nearest(20)` can have gaps when a strike near spot has little GEX.
-Swap the filter on a live book with `book.setFilter(withinPct(0.02))`. Nothing is sent
-to the server, and the current book is yielded again through the new filter. The
-book updates about every 5 seconds today.
+| Event | Fires when | Handler receives |
+|---|---|---|
+| `update` | A new book is ready, and right after `update(...)` changes the filter | a `Book` |
+| `status` | The connection state changes | `"connecting"`, `"live"`, `"reconnecting"` or `"closed"` |
+| `error` | A handler threw or rejected, or the stream hit a problem | the error (`StreamError` for stream refusals) |
 
-The client keeps the book correct. It checks each keyframe's CRC, applies an update
-only when the version is exactly one ahead and the CRC matches, ignores duplicates,
-and asks the server for a fresh keyframe on any gap or mismatch. It mints a fresh
-ticket for every connection, waits out `Retry-After`, backs off with jitter,
-resubscribes after a reconnect and pings the server every 20 seconds. One client is
-one connection. Leave the loop, or call `close()` on the book, to end it.
+A plain handler runs inline, so keep it quick. An async handler is awaited one call
+at a time. Delivery is conflated: a busy handler is next called with the newest book,
+never a backlog. A handler that throws goes to `error` and never stops the stream.
 
-A refusal that retrying cannot fix (`stream_preview`, `client_outdated`,
-`proto_required`, `protobuf_required`) rejects the iterator with a `StreamError`. It is an `ITMError` and
-carries the server's `reason` and `terminal`. `stream.gex()` still returns raw frames
-for signed-in sessions. See `examples/gex-stream.ts` and the
-[streaming guide](../../../docs/streaming.md).
+Besides handlers: `spy.latest` is the newest book, `spy.age` its age in seconds,
+`await spy.ready()` the first book, `await spy.changed()` the next one and
+`for await (const book of spy)` iterates conflated books. `spy.update({ within: 0.05 })`
+changes the filter and `spy.close()` ends the book (`await using` works where the
+runtime supports it). `client.run()` resolves when every live book has closed. It
+installs no signal handler, so close the client on `SIGINT` as shown.
+
+A book has `symbol`, `spot`, `netGex` (the whole-chain total), `flip` (or `null`),
+`time` (a `Date`), `age` and rows with `strike`, `call`, `put` and `total`. `get(600)`
+finds one strike, `rows` is the array and `columns` gives typed arrays. `meta` holds
+`bookId` (a `bigint`), `version`, `changed` (the strikes that moved) and `reason`. The
+book holds the 120 strikes with the largest gross GEX and carries no open interest.
+
+Filters are an options object: `nearest`, `within` (a fraction of spot, `0.02` is 2%)
+or `between: [lo, hi]`, optionally with `top` and `by` (`"gross"`, `"net"`, `"call"`
+or `"put"`). They choose among the book's 120 strikes, so `nearest: 20` can have gaps.
+
+The SDK keeps the book correct. It checks a CRC on every frame, asks for a fresh
+keyframe on any gap, backs off with jitter and resubscribes after a reconnect. A
+refusal it cannot retry is an `error` with `terminal` set, then the book closes.
+Signed-in sessions keep raw frames through `stream.subscribe("gex", { symbol })`.
+Recipes (flip alerts, many symbols, web handlers, reconnects, async I/O) are in the
+[streaming guide](../../../docs/streaming.md#recipes). See also `examples/gex-stream.ts`.
 
 From `ts/`, run `npm ci`, `npm run typecheck`, `npm test`, and
 `npm run build --workspace @itmatrixhq/core`. Contributions should add a focused

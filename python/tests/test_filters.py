@@ -1,13 +1,37 @@
-"""Filters over a GEX book state."""
+"""Strike filters built from the keyword arguments of stream.gex(...)."""
 
 import unittest
 from dataclasses import fields, replace
 from datetime import datetime, timezone
 
 import itmatrix as itm
-from itmatrix import filters
-from itmatrix.filters import all as all_strikes
-from itmatrix.filters import between, nearest, top, within_pct
+from itmatrix._core.filters import build
+from itmatrix._core.gex_book import GexBookState
+
+
+def f(**options):
+    built, _ = build(options)
+    return built or (lambda state: state)
+
+
+def all_strikes():
+    return f()
+
+
+def nearest(n):
+    return f(nearest=n)
+
+
+def within_pct(p):
+    return f(within=p)
+
+
+def between(lo, hi):
+    return f(between=(lo, hi))
+
+
+def top(n, by=None):
+    return f(top=n, by=by)
 
 # Spot 601.25. Strikes in thousandths with call and put sides.
 STRIKES = (580_000, 595_000, 600_000, 602_500, 605_000, 610_000, 620_000)
@@ -17,8 +41,8 @@ PUT = (-300.0e6, -125.0e6, -93.75e6, -46.875e6, -15.625e6, 0.0, -1.0e6)
 
 def book(
     spot: float = 601.25, changed: tuple[int, ...] = (1, 4, 6)
-) -> itm.GexBookState:
-    return itm.GexBookState(
+) -> GexBookState:
+    return GexBookState(
         symbol="SPY",
         book_id=42,
         version=8,
@@ -49,7 +73,7 @@ HEADER = (
 
 
 class FilterTests(unittest.TestCase):
-    def assert_view(self, view: itm.GexBookState, strikes: list[float]) -> None:
+    def assert_view(self, view: GexBookState, strikes: list[float]) -> None:
         state = book()
         for name in HEADER:
             self.assertEqual(getattr(view, name), getattr(state, name), name)
@@ -127,13 +151,20 @@ class FilterTests(unittest.TestCase):
 
     def test_view_has_the_state_shape(self) -> None:
         view = nearest(2)(book())
-        self.assertIsInstance(view, itm.GexBookState)
+        self.assertIsInstance(view, GexBookState)
         self.assertEqual(
-            [f.name for f in fields(view)], [f.name for f in fields(itm.GexBookState)]
+            [f.name for f in fields(view)], [f.name for f in fields(GexBookState)]
         )
 
-    def test_filters_nest(self) -> None:
-        self.assertEqual(top(1, by="call")(nearest(3)(book())).strikes, (600.0,))
+    def test_top_combines_with_a_window(self) -> None:
+        self.assertEqual(f(nearest=3, top=1, by="call")(book()).strikes, (600.0,))
+        self.assertEqual(build({"within": 0.01, "top": 2})[1], {"within": 0.01, "top": 2, "by": "gross"})
+        with self.assertRaises(ValueError):
+            build({"nearest": 3, "between": (1, 2)})
+        with self.assertRaises(ValueError):
+            build({"by": "net"})
+        with self.assertRaises(TypeError):
+            build({"near": 3})
 
     def test_invalid_arguments_raise_at_construction(self) -> None:
         for make in (
@@ -150,27 +181,16 @@ class FilterTests(unittest.TestCase):
         for make in (
             lambda: nearest(2.5),  # type: ignore[arg-type]
             lambda: nearest(True),  # type: ignore[arg-type]
-            lambda: within_pct("2%"),  # type: ignore[arg-type]
+            lambda: within_pct("2%"),
+            lambda: f(between=600),  # type: ignore[arg-type]
             lambda: between("590", 610),  # type: ignore[arg-type]
         ):
             with self.assertRaises(TypeError):
                 make()
 
-    def test_repr_and_equality(self) -> None:
-        self.assertEqual(repr(nearest(20)), "nearest(20)")
-        self.assertEqual(repr(top(5, by="net")), "top(5, by='net')")
-        self.assertEqual(repr(within_pct(0.02)), "within_pct(0.02)")
-        self.assertEqual(repr(between(590, 610)), "between(590, 610)")
-        self.assertEqual(repr(all_strikes()), "all()")
-        self.assertEqual(nearest(20), nearest(20))
-        self.assertNotEqual(nearest(20), nearest(21))
-
-    def test_public_names(self) -> None:
-        self.assertIs(itm.filters, filters)
-        for name in ("nearest", "within_pct", "between", "top", "all"):
-            self.assertTrue(callable(getattr(filters, name)), name)
-        self.assertIn("filters", itm.__all__)
-        self.assertIn("GexBookFilter", itm.__all__)
+    def test_old_filter_names_are_gone(self) -> None:
+        for name in ("filters", "GexBookFilter", "GexBookSubscription"):
+            self.assertNotIn(name, itm.__all__)
 
 
 if __name__ == "__main__":

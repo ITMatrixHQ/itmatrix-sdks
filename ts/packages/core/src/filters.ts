@@ -142,3 +142,61 @@ function pick(state: GexBookState, chosen: number[]): GexBookState {
     changed,
   });
 }
+
+/**
+ * Filter options for a live GEX book: at most one window (`nearest`, `within`
+ * or `between`), optionally followed by `top`.
+ */
+export interface GexFilter {
+  /** The `n` book strikes closest to spot. */
+  nearest?: number;
+  /** Book strikes within a fraction of spot: `0.05` keeps strikes within 5%. */
+  within?: number;
+  /** Book strikes from `lo` to `hi` dollars, both included. */
+  between?: readonly [number, number];
+  /** Then keep the `n` largest by `by` (default `gross`). */
+  top?: number;
+  /** What `top` ranks by. */
+  by?: GexRankBy;
+}
+
+const FILTER_KEYS: ReadonlySet<string> = new Set(["nearest", "within", "between", "top", "by"]);
+
+/**
+ * Check filter options and build the filter. Returns `undefined` for the whole
+ * book. Throws `TypeError` or `RangeError` naming the bad option.
+ */
+export function buildFilter(options: GexFilter = {}): GexBookFilter | undefined {
+  if (options === null || typeof options !== "object") {
+    throw new TypeError("filter options must be an object such as { nearest: 20 }");
+  }
+  for (const key of Object.keys(options)) {
+    if (!FILTER_KEYS.has(key)) {
+      throw new TypeError(`unknown filter option "${key}"; use nearest, within, between, top and by`);
+    }
+  }
+  const windows = (["nearest", "within", "between"] as const).filter((k) => options[k] !== undefined);
+  if (windows.length > 1) {
+    throw new RangeError(`pass at most one of nearest, within and between, not ${windows.join(" and ")}`);
+  }
+  if (options.by !== undefined && options.top === undefined) {
+    throw new RangeError("by applies to top: pass top with it");
+  }
+  const steps: GexBookFilter[] = [];
+  if (options.nearest !== undefined) steps.push(nearest(options.nearest));
+  if (options.within !== undefined) {
+    if (typeof options.within !== "number") throw new TypeError("within must be a fraction of spot such as 0.05");
+    steps.push(withinPct(options.within));
+  }
+  if (options.between !== undefined) {
+    const range = options.between;
+    if (!Array.isArray(range) || range.length !== 2 || typeof range[0] !== "number" || typeof range[1] !== "number") {
+      throw new TypeError("between must be a pair of strikes such as [590, 610]");
+    }
+    steps.push(between(range[0], range[1]));
+  }
+  if (options.top !== undefined) steps.push(top(options.top, options.by ?? "gross"));
+  if (steps.length === 0) return undefined;
+  if (steps.length === 1) return steps[0];
+  return (state) => steps.reduce((view, step) => step(view), state);
+}

@@ -15,7 +15,7 @@
  * `ITMATRIX_NO_UPGRADE_CHECK=1` silences it.
  */
 
-export const SDK_VERSION = "1.1.0";
+export const SDK_VERSION = "1.2.0";
 export const CLIENT_NAME = `itmatrix-typescript/${SDK_VERSION}`;
 export const SDK_HEADER = "X-ITM-SDK";
 export const CURRENT_HEADER = "X-ITM-SDK-Current";

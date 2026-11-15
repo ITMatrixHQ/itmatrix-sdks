@@ -1,18 +1,16 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  all,
-  GexBookSubscription,
   ITMClient,
   ITMError,
   Stream,
   StreamError,
   streamWire,
-  type GexBookState,
-  nearest,
   type StreamConfig,
-  top,
 } from "../src/index.js";
+import type { GexBookState } from "../src/gexBook.js";
+import { BookFeed } from "../src/stream.js";
+import type { Book } from "../src/live.js";
 
 type Listener = (event: Event | MessageEvent) => void;
 type Control = Record<string, unknown>;
@@ -310,8 +308,8 @@ describe("keyed GEX book stream", () => {
 
   it("authenticates with protocol 8, the subprotocol and the client name", async () => {
     const h = harness();
-    const book = h.stream.gexBook("spy");
-    expect(book).toBeInstanceOf(GexBookSubscription);
+    const book = h.stream.bookFeed("spy");
+    expect(book).toBeInstanceOf(BookFeed);
     expect(book.symbol).toBe("SPY");
     const reader = new Reader(book);
     const socket = await h.ready();
@@ -344,7 +342,7 @@ describe("keyed GEX book stream", () => {
 
   it("accepts an ArrayBuffer message as a real socket delivers it", async () => {
     const h = harness();
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     const bytes = raw(KEYFRAME_HEX);
     socket.bytes(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -353,7 +351,7 @@ describe("keyed GEX book stream", () => {
 
   it("lets a credential that is not an itm_ key use neither a book nor protocol 8", async () => {
     const h = harness({ keyAuth: false });
-    const book = h.stream.gexBook("SPY");
+    const book = h.stream.bookFeed("SPY");
     const error = await book.next().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(StreamError);
     expect((error as StreamError).reason).toBe("api_key_required");
@@ -364,7 +362,7 @@ describe("keyed GEX book stream", () => {
 
   it("resyncs once on a CRC failure and drops updates until a keyframe", async () => {
     const h = harness({ resyncIntervalMs: 60_000 });
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     socket.bytes(raw(KEYFRAME_HEX));
     await reader.next();
@@ -390,7 +388,7 @@ describe("keyed GEX book stream", () => {
 
   it("resyncs on a corrupted keyframe", async () => {
     const h = harness({ resyncIntervalMs: 60_000 });
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     const corrupted = wire(KEYFRAME_HEX);
     corrupted.gexStrikeBook!.callGex[1] = 250_000_016;
@@ -403,7 +401,7 @@ describe("keyed GEX book stream", () => {
 
   it("repeats the resync after the interval while updates are dropped", async () => {
     const h = harness({ resyncIntervalMs: 50 });
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     socket.bytes(raw(KEYFRAME_HEX));
     await reader.next();
@@ -416,7 +414,7 @@ describe("keyed GEX book stream", () => {
 
   it("ignores duplicates without a resync", async () => {
     const h = harness();
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     for (const hex of [KEYFRAME_HEX, UPDATE_HEX, UPDATE_HEX, UPDATE_HEX]) {
       socket.bytes(raw(hex));
@@ -429,7 +427,7 @@ describe("keyed GEX book stream", () => {
 
   it("mints a fresh ticket, resubscribes and waits for a keyframe after a reconnect", async () => {
     const h = harness();
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const first = await h.ready();
     first.bytes(raw(KEYFRAME_HEX));
     await reader.next();
@@ -454,7 +452,7 @@ describe("keyed GEX book stream", () => {
     ["invalid_params", "client_required"],
   ])("raises %s / %s as a terminal error and does not retry", async (code, reason) => {
     const h = harness({ plans: [[{ op: "nack", id: null, code, reason }]] });
-    const book = h.stream.gexBook("SPY");
+    const book = h.stream.bookFeed("SPY");
     const error = await book.next().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(StreamError);
     expect(error).toBeInstanceOf(ITMError);
@@ -476,7 +474,7 @@ describe("keyed GEX book stream", () => {
         }),
       ],
     });
-    const error = await h.stream.gexBook("SPY").next().catch((cause: unknown) => cause);
+    const error = await h.stream.bookFeed("SPY").next().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(StreamError);
     expect(error).toMatchObject({ reason: "stream_preview", terminal: true, status: 403 });
     await pause(50);
@@ -487,7 +485,7 @@ describe("keyed GEX book stream", () => {
     const h = harness({
       mints: [new ITMError({ status: 401, code: "unauthenticated", message: "bad key" })],
     });
-    const error = await h.stream.gexBook("SPY").next().catch((cause: unknown) => cause);
+    const error = await h.stream.bookFeed("SPY").next().catch((cause: unknown) => cause);
     expect(error).toMatchObject({ code: "unauthenticated", terminal: true, status: 401 });
     await pause(50);
     expect(h.tickets).toBe(1);
@@ -497,7 +495,7 @@ describe("keyed GEX book stream", () => {
     const h = harness({
       mints: [new ITMError({ status: 503, code: "internal", message: "down" })],
     });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     await h.ready();
     expect(h.tickets).toBe(2);
   });
@@ -511,7 +509,7 @@ describe("keyed GEX book stream", () => {
       ],
     });
     const started = performance.now();
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     await h.ready();
     expect(h.tickets).toBe(2);
     expect(h.connectedAt[0]! - started).toBeGreaterThanOrEqual(115);
@@ -524,7 +522,7 @@ describe("keyed GEX book stream", () => {
     const low = harness({
       plans: [[refusal]], connectionLimitBackoffMs: 100, random: () => 0,
     });
-    low.stream.gexBook("SPY");
+    low.stream.bookFeed("SPY");
     await low.ready(2);
     expect(low.connectedAt[1]! - low.connectedAt[0]!).toBeGreaterThanOrEqual(95);
     expect(low.tickets).toBe(2);
@@ -532,7 +530,7 @@ describe("keyed GEX book stream", () => {
     const high = harness({
       plans: [[refusal]], connectionLimitBackoffMs: 100, random: () => 1,
     });
-    high.stream.gexBook("SPY");
+    high.stream.bookFeed("SPY");
     await high.ready(2);
     expect(high.connectedAt[1]! - high.connectedAt[0]!).toBeGreaterThanOrEqual(145);
   });
@@ -540,7 +538,7 @@ describe("keyed GEX book stream", () => {
   it.each(["draining", "slow_consumer"])("waits for the hint after %s", async (code) => {
     // Without the hint the default wait would be 5 s.
     const h = harness({ minReconnectMs: 5000, maxReconnectMs: 10_000, random: () => 1 });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     const first = await h.ready();
     const sentAt = performance.now();
     first.control({ op: "bye", code, reconnect_after_ms: 120 });
@@ -552,7 +550,7 @@ describe("keyed GEX book stream", () => {
 
   it("reconnects at once with a new ticket after reauth", async () => {
     const h = harness({ minReconnectMs: 5000, maxReconnectMs: 10_000, random: () => 1 });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     const first = await h.ready();
     const sentAt = performance.now();
     first.control({ op: "bye", code: "reauth", reason: "reauth" });
@@ -568,7 +566,7 @@ describe("keyed GEX book stream", () => {
       maxReconnectMs: 10_000,
       random: () => 1,
     });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     await h.ready(2);
     expect(h.connectedAt[1]! - h.connectedAt[0]!).toBeGreaterThanOrEqual(95);
   });
@@ -586,7 +584,7 @@ describe("keyed GEX book stream", () => {
       random: draw(1),
     });
     const started = performance.now();
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     await h.ready();
     // Two failures: caps 20 ms then 40 ms, both at the top of the jitter range.
     expect(h.connectedAt[0]! - started).toBeGreaterThanOrEqual(55);
@@ -602,14 +600,14 @@ describe("keyed GEX book stream", () => {
       random: () => 0,
     });
     const started = performance.now();
-    lucky.stream.gexBook("SPY");
+    lucky.stream.bookFeed("SPY");
     await lucky.ready();
     expect(lucky.connectedAt[0]! - started).toBeLessThan(1000);
   });
 
   it("answers server pings and sends its own", async () => {
     const h = harness({ pingIntervalMs: 50, deadAfterMs: 5000 });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     const socket = await h.ready();
     socket.control({ op: "ping" });
     await waitFor(() => socket.sent.some((m) => m.op === "pong"));
@@ -619,7 +617,7 @@ describe("keyed GEX book stream", () => {
 
   it("treats silence as a dead connection", async () => {
     const h = harness({ pingIntervalMs: 50, deadAfterMs: 200 });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     const first = await h.ready();
     await h.ready(2);
     expect(first.closed).toBe(true);
@@ -628,7 +626,7 @@ describe("keyed GEX book stream", () => {
 
   it("is kept alive by traffic", async () => {
     const h = harness({ pingIntervalMs: 50, deadAfterMs: 200 });
-    h.stream.gexBook("SPY");
+    h.stream.bookFeed("SPY");
     const socket = await h.ready();
     for (let i = 0; i < 10; i += 1) {
       socket.control({ op: "pong" });
@@ -640,8 +638,8 @@ describe("keyed GEX book stream", () => {
 
   it("carries every book on one connection", async () => {
     const h = harness();
-    const spy = h.stream.gexBook("SPY");
-    const qqq = h.stream.gexBook("QQQ");
+    const spy = h.stream.bookFeed("SPY");
+    const qqq = h.stream.bookFeed("QQQ");
     await waitFor(() => h.sockets.length === 1 && subs(h.sockets[0]!).length === 2);
     const socket = h.sockets[0]!;
     expect(new Set(subs(socket).map((m) => m.symbol))).toEqual(new Set(["SPY", "QQQ"]));
@@ -657,7 +655,7 @@ describe("keyed GEX book stream", () => {
 
   it("ends the iterator on close and when a for-await loop breaks", async () => {
     const h = harness();
-    const book = h.stream.gexBook("SPY");
+    const book = h.stream.bookFeed("SPY");
     const socket = await h.ready();
     socket.bytes(raw(KEYFRAME_HEX));
     for await (const state of book) {
@@ -670,8 +668,8 @@ describe("keyed GEX book stream", () => {
 
   it("fails only the refused subscription", async () => {
     const h = harness();
-    const spy = h.stream.gexBook("SPY");
-    const qqq = new Reader(h.stream.gexBook("QQQ"));
+    const spy = h.stream.bookFeed("SPY");
+    const qqq = new Reader(h.stream.bookFeed("QQQ"));
     await waitFor(() => h.sockets.length === 1 && subs(h.sockets[0]!).length === 2);
     const socket = h.sockets[0]!;
     socket.control({
@@ -691,66 +689,16 @@ describe("keyed GEX book stream", () => {
     const h = harness({
       plans: [[{ op: "nack", id: null, code: "not_entitled_tier", reason: "stream_preview" }]],
     });
-    await h.stream.gexBook("SPY").next().catch(() => undefined);
-    const again = new Reader(h.stream.gexBook("SPY"));
+    await h.stream.bookFeed("SPY").next().catch(() => undefined);
+    const again = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready(2);
     socket.bytes(raw(KEYFRAME_HEX));
     expect((await again.next()).version).toBe(7);
   });
 
-  it("yields the filtered view after every applied frame", async () => {
-    const h = harness();
-    const reader = new Reader(h.stream.gexBook("SPY", { filter: nearest(2) }));
-    const socket = await h.ready();
-    socket.bytes(raw(KEYFRAME_HEX));
-    const first = await reader.next();
-    // Spot 601.25: 600 and 602.5 are both 1.25 away.
-    expect(Array.from(first.strikes)).toEqual([600, 602.5]);
-    expect(Array.from(first.callGex)).toEqual([250_000_000, 187_500_000]);
-    expect(Array.from(first.gex)).toEqual([156_250_000, 140_625_000]);
-    expect([first.version, first.spot, first.netGex, first.reason]).toEqual([
-      7, 601.25, -1_500_000_000, "subscribe",
-    ]);
-    expect(Array.from(first.changed)).toEqual([0, 1]);
-    socket.bytes(raw(UPDATE_HEX));
-    const second = await reader.next();
-    // The update touched book positions 1 (600) and 4 (610); only 600 is in view.
-    expect(Array.from(second.strikes)).toEqual([600, 602.5]);
-    expect(Array.from(second.changed)).toEqual([0]);
-    expect(Array.from(second.gex)).toEqual([143_750_000, 140_625_000]);
-  });
-
-  it("swaps the filter on a live subscription without resubscribing", async () => {
-    const h = harness();
-    const book = h.stream.gexBook("SPY");
-    const reader = new Reader(book);
-    const socket = await h.ready();
-    socket.bytes(raw(KEYFRAME_HEX));
-    expect((await reader.next()).strikes).toHaveLength(5);
-
-    book.setFilter(top(1, "put"));
-    expect(book.filter).not.toBe(undefined);
-    const swapped = await reader.next();
-    expect(Array.from(swapped.strikes)).toEqual([595]);
-    expect(Array.from(swapped.changed)).toEqual([0]);
-    expect(swapped.version).toBe(7);
-    expect(book.state!.strikes).toHaveLength(5);
-
-    socket.bytes(raw(UPDATE_HEX));
-    const next = await reader.next();
-    expect([next.version, Array.from(next.strikes), Array.from(next.changed)]).toEqual([
-      8, [595], [],
-    ]);
-    book.setFilter(all());
-    expect((await reader.next()).strikes).toHaveLength(5);
-    expect(subs(socket)).toHaveLength(1);
-    expect(socket.sent.some((m) => m.op === "unsub" || m.op === "resync")).toBe(false);
-    expect(() => book.setFilter("nearest" as never)).toThrow(TypeError);
-  });
-
   it("does not decode the deprecated v1 book messages", async () => {
     const h = harness();
-    const reader = new Reader(h.stream.gexBook("SPY"));
+    const reader = new Reader(h.stream.bookFeed("SPY"));
     const socket = await h.ready();
     socket.bytes(encode(streamWire.Frame.fromPartial({
       symbol: "SPY",
@@ -764,7 +712,7 @@ describe("keyed GEX book stream", () => {
 
   it("closing the stream ends the books and stops the reconnect", async () => {
     const h = harness({ minReconnectMs: 30, maxReconnectMs: 30, random: () => 1 });
-    const book = h.stream.gexBook("SPY");
+    const book = h.stream.bookFeed("SPY");
     const first = await h.ready();
     first.close();
     h.stream.close();
@@ -814,7 +762,7 @@ describe("ITMClient stream wiring", () => {
 
   it("connects an itm_ key with protocol 8 and the client name", async () => {
     const { client, sockets, mints } = build("itm_test");
-    const reader = new Reader(client.stream.gexBook("SPY"));
+    const reader = new Reader(client.stream.bookFeed("SPY"));
     await waitFor(() => sockets.length === 1 && subs(sockets[0]!).length === 1);
     expect(mints).toEqual([
       { authorization: "Bearer itm_test", method: "POST", path: "/v2/stream/ticket" },
@@ -832,7 +780,7 @@ describe("ITMClient stream wiring", () => {
       build(undefined, "session-token"),
       build("not-an-itm-key"),
     ]) {
-      const error = await client.stream.gexBook("SPY").next().catch((cause: unknown) => cause);
+      const error = await client.stream.bookFeed("SPY").next().catch((cause: unknown) => cause);
       expect(error).toMatchObject({ reason: "api_key_required", terminal: true });
       expect(mints).toHaveLength(0);
       client.stream.spot("SPY");
@@ -853,7 +801,7 @@ describe("ITMClient stream wiring", () => {
       )
     );
     const started = performance.now();
-    client.stream.gexBook("SPY");
+    client.stream.bookFeed("SPY");
     await waitFor(() => sockets.length === 1 && subs(sockets[0]!).length === 1);
     expect(mints).toHaveLength(2);
     expect(performance.now() - started).toBeGreaterThanOrEqual(145);
@@ -873,10 +821,218 @@ describe("ITMClient stream wiring", () => {
         { status: 403 },
       )
     );
-    const error = await client.stream.gexBook("SPY").next().catch((cause: unknown) => cause);
+    const error = await client.stream.bookFeed("SPY").next().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(StreamError);
     expect(error).toMatchObject({ reason: "stream_preview", terminal: true, status: 403 });
     await pause(50);
     expect([mints.length, sockets.length]).toEqual([1, 0]);
+  });
+});
+
+describe("live GEX book (stream.gex)", () => {
+  const harnesses: Harness[] = [];
+  afterEach(() => {
+    for (const harness of harnesses.splice(0)) harness.stream.close();
+  });
+  const harness = (options?: ConstructorParameters<typeof Harness>[0]): Harness => {
+    const value = new Harness(options);
+    harnesses.push(value);
+    return value;
+  };
+
+  it("returns at once and emits books, status and meta", async () => {
+    const h = harness();
+    const spy = h.stream.gex("spy");
+    expect(spy.latest).toBeUndefined();
+    expect(spy.age).toBeUndefined();
+    const books: Book[] = [];
+    const statuses: string[] = [];
+    spy.on("update", (book) => { books.push(book); });
+    spy.on("status", (status) => { statuses.push(status); });
+    const socket = await h.ready();
+    expect(subs(socket)).toEqual([{ op: "sub", id: "sdk-1", topic: "gex", symbol: "SPY" }]);
+    socket.bytes(raw(KEYFRAME_HEX));
+    const first = await spy.ready(1000);
+    expect(spy.latest).toBe(first);
+    expect([first.symbol, first.spot, first.length]).toEqual(["SPY", 601.25, 5]);
+    expect([...first].map((row) => row.strike)).toEqual([595, 600, 602.5, 605, 610]);
+    expect(first.meta.reason).toBe("subscribe");
+    expect(first.meta.version).toBe(7);
+    expect(first.columns.strike).toHaveLength(5);
+    expect(first.age).toBeGreaterThan(0);
+
+    socket.bytes(raw(UPDATE_HEX));
+    await waitFor(() => books.length === 2);
+    expect(books[1]!.meta.changed).toEqual([600, 610]);
+    expect(books[1]!.get(610)!.total).toBe(28_125_000);
+    expect(books[1]!.get(611)).toBeUndefined();
+    expect(statuses).toEqual(["live"]);
+    spy.close();
+    await waitFor(() => socket.sent.some((m) => m.op === "unsub"));
+    expect(statuses).toEqual(["live", "closed"]);
+    expect(spy.closed).toBe(true);
+  });
+
+  it("filters every book and update() re-emits at once", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY", { nearest: 2 });
+    const socket = await h.ready();
+    socket.bytes(raw(KEYFRAME_HEX));
+    expect(Array.from((await spy.ready(1000)).columns.strike)).toEqual([600, 602.5]);
+    spy.update({ top: 1, by: "put" });
+    expect([...spy.latest!].map((r) => r.strike)).toEqual([595]);
+    expect(spy.filter).toEqual({ top: 1, by: "put" });
+    spy.update();
+    expect(spy.latest!.length).toBe(5);
+    expect(subs(socket)).toHaveLength(1);
+    expect(() => spy.update({ nearest: 2, within: 0.1 })).toThrow(RangeError);
+    expect(() => h.stream.gex("SPY", { by: "net" })).toThrow(RangeError);
+    expect(() => h.stream.gex(["SPY"] as never)).toThrow(TypeError);
+    expect(() => spy.on("tick" as never, () => {})).toThrow(RangeError);
+  });
+
+  it("changed() waits for the next book; for await is conflated", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    const socket = await h.ready();
+    socket.bytes(raw(KEYFRAME_HEX));
+    await spy.ready(1000);
+    await expect(spy.changed(20)).rejects.toThrow(/no new GEX book/);
+    const next = spy.changed(1000);
+    socket.bytes(raw(UPDATE_HEX));
+    expect((await next).meta.version).toBe(8);
+    socket.bytes(raw(UPDATE2_HEX));
+    await waitFor(() => spy.latest!.meta.version === 9);
+    for await (const book of spy) {
+      expect(book.meta.version).toBe(9);
+      break;
+    }
+  });
+
+  it("a slow async handler gets the newest book, not a backlog", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const seen: number[] = [];
+    spy.on("update", async (book) => {
+      seen.push(book.meta.version);
+      await gate;
+    });
+    const socket = await h.ready();
+    socket.bytes(raw(KEYFRAME_HEX));
+    await waitFor(() => seen.length === 1);
+    socket.bytes(raw(UPDATE_HEX));
+    socket.bytes(raw(UPDATE2_HEX));
+    await waitFor(() => spy.latest?.meta.version === 9);
+    release();
+    await waitFor(() => seen.length === 2);
+    expect(seen).toEqual([7, 9]);
+  });
+
+  it("a throwing handler reports an error and the stream goes on", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    const errors: unknown[] = [];
+    const versions: number[] = [];
+    spy.on("update", () => { throw new Error("handler bug"); });
+    spy.on("update", async () => { throw new Error("async bug"); });
+    spy.on("update", (book) => { versions.push(book.meta.version); });
+    spy.on("error", (error) => { errors.push(error); });
+    const socket = await h.ready();
+    socket.bytes(raw(KEYFRAME_HEX));
+    socket.bytes(raw(UPDATE_HEX));
+    await waitFor(() => versions.length === 2 && errors.length === 4);
+    expect(spy.status).toBe("live");
+  });
+
+  it("each symbol is its own object on one connection; the last close ends it", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    const qqq = h.stream.gex("qqq");
+    const socket = await h.ready();
+    await waitFor(() => subs(socket).length === 2);
+    expect(subs(socket).map((m) => m.symbol)).toEqual(["SPY", "QQQ"]);
+    expect(h.sockets).toHaveLength(1);
+    spy.close();
+    expect(socket.closed).toBe(false);
+    qqq.close();
+    await waitFor(() => socket.closed);
+  });
+
+  it("reports reconnecting, then live again", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    const statuses: string[] = [];
+    spy.on("status", (status) => { statuses.push(status); });
+    const first = await h.ready();
+    first.close();
+    await h.ready(2);
+    await waitFor(() => statuses.length === 3);
+    expect(statuses).toEqual(["live", "reconnecting", "live"]);
+  });
+
+  it("a terminal refusal is an error event, then closed", async () => {
+    const h = harness({
+      plans: [[{ op: "nack", id: null, code: "invalid_params", reason: "client_outdated" }]],
+    });
+    const spy = h.stream.gex("SPY");
+    const errors: unknown[] = [];
+    spy.on("error", (error) => { errors.push(error); });
+    const error = await spy.ready(1000).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(StreamError);
+    expect((error as StreamError).reason).toBe("client_outdated");
+    expect(errors).toEqual([error]);
+    expect(spy.status).toBe("closed");
+  });
+
+  it("a token session gets api_key_required", async () => {
+    const stream = new Stream({
+      url: "wss://stream.test/v2/ws",
+      ticket: async () => ({ ticket: "t", exp: 1 }),
+      webSocketFactory: (_url, protocols) => new FakeSocket(protocols) as unknown as WebSocket,
+      keyAuth: false,
+    });
+    const spy = stream.gex("SPY");
+    const error = await spy.ready(1000).catch((cause: unknown) => cause);
+    expect((error as StreamError).reason).toBe("api_key_required");
+    stream.close();
+  });
+
+  it("run() resolves at once with no live book", async () => {
+    const h = harness();
+    await h.stream.run();
+  });
+
+  it("run() resolves when the last live book closes", async () => {
+    const h = harness();
+    const spy = h.stream.gex("SPY");
+    const qqq = h.stream.gex("QQQ");
+    await h.ready();
+    let done = false;
+    const running = h.stream.run().then(() => { done = true; });
+    spy.close();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(done).toBe(false);
+    qqq.close();
+    await running;
+    expect(done).toBe(true);
+  });
+
+  it("closing the client ends client.run() and every live book", async () => {
+    const client = new ITMClient({
+      apiKey: "itm_test",
+      retries: 0,
+      fetch: async () => Response.json({ data: { ticket: "t", exp: 1 } }),
+      stream: {
+        webSocketFactory: (_url, protocols) => new FakeSocket(protocols) as unknown as WebSocket,
+      },
+    });
+    await client.run();
+    const spy = client.stream.gex("SPY");
+    const running = client.run();
+    client.close();
+    await running;
+    expect(spy.closed).toBe(true);
   });
 });

@@ -12,7 +12,6 @@ from itmatrix._core import Stream
 from itmatrix._core._wire.ws_pb2 import Frame
 from itmatrix._core.errors import ITMError
 from itmatrix._core.stream import StreamError
-from itmatrix.filters import nearest, top
 
 _CLOSED = object()
 
@@ -194,7 +193,7 @@ _VECTORS = {
 KEYFRAME_HEX = _VECTORS["keyframe"]["frame_hex"]
 UPDATE_HEX = _VECTORS["update_1"]["frame_hex"]
 UPDATE_2_HEX = _VECTORS["update_2"]["frame_hex"]
-CLIENT = "itmatrix-python/1.1.0"
+CLIENT = "itmatrix-python/1.2.0"
 
 
 def raw(hex_value: str) -> bytes:
@@ -295,7 +294,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_auth_subprotocol_subscribe_and_book_updates(self) -> None:
         h = self.harness()
-        book = h.stream.gex_book("spy")
+        book = h.stream._book_feed("spy")
         await book.start()
         socket = await h.ready()
 
@@ -335,57 +334,6 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn({"op": "resync", "id": "sdk-1"}, socket.sent)
 
-    async def test_filter_narrows_every_state_and_swaps_live(self) -> None:
-        h = self.harness()
-        book = h.stream.gex_book("SPY", filter=nearest(2))
-        self.assertEqual(book.filter, nearest(2))
-        self.assertIsNone(book.view)
-        await book.start()
-        socket = await h.ready()
-        # The server subscription does not carry the filter.
-        self.assertEqual(
-            subs(socket),
-            [{"op": "sub", "id": "sdk-1", "topic": "gex", "symbol": "SPY"}],
-        )
-
-        await socket.emit(raw(KEYFRAME_HEX))
-        first = await asyncio.wait_for(anext(book), 1)
-        # Spot 601.25: 600 and 602.5 are both 1.25 away.
-        self.assertEqual(first.strikes, (600.0, 602.5))
-        self.assertEqual((first.version, first.net_gex), (7, -1_500_000_000.0))
-        self.assertEqual(first.gex, (156_250_000.0, 140_625_000.0))
-        self.assertEqual(len(book.state.strikes), 5)  # type: ignore[union-attr]
-
-        book.set_filter(top(1, by="put"))
-        self.assertEqual(book.view.strikes, (595.0,))  # type: ignore[union-attr]
-        await socket.emit(raw(UPDATE_HEX))
-        second = await asyncio.wait_for(anext(book), 1)
-        self.assertEqual((second.version, second.strikes), (8, (595.0,)))
-        self.assertEqual(second.changed, ())
-
-        book.set_filter(None)
-        await socket.emit(raw(UPDATE_2_HEX))
-        third = await asyncio.wait_for(anext(book), 1)
-        self.assertEqual((third.version, len(third.strikes)), (9, 5))
-        # One subscription throughout: no unsub, no second sub.
-        self.assertEqual(len(subs(socket)), 1)
-        self.assertNotIn({"op": "unsub", "id": "sdk-1"}, socket.sent)
-        with self.assertRaises(TypeError):
-            book.set_filter("nearest 20")  # type: ignore[arg-type]
-
-    async def test_a_failing_filter_ends_only_that_subscription(self) -> None:
-        def broken(_state: Any) -> Any:
-            raise RuntimeError("filter bug")
-
-        h = self.harness()
-        book = h.stream.gex_book("SPY", filter=broken)
-        await book.start()
-        socket = await h.ready()
-        await socket.emit(raw(KEYFRAME_HEX))
-        with self.assertRaisesRegex(RuntimeError, "filter bug"):
-            await asyncio.wait_for(anext(book), 1)
-        await wait_until(lambda: {"op": "unsub", "id": "sdk-1"} in socket.sent)
-
     async def test_token_credentials_cannot_open_a_book(self) -> None:
         tickets = 0
 
@@ -396,7 +344,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
         stream = Stream(url="wss://stream.test/v2/ws", ticket=ticket)
         with self.assertRaises(StreamError) as caught:
-            await stream.gex_book("SPY").start()
+            await stream._book_feed("SPY").start()
         self.assertEqual(caught.exception.reason, "api_key_required")
         self.assertEqual(tickets, 0)
 
@@ -404,7 +352,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         h = self.harness(resync_interval=60)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         await socket.emit(raw(KEYFRAME_HEX))
@@ -430,7 +378,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         h = self.harness(resync_interval=60)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         bad = Frame.FromString(raw(KEYFRAME_HEX))
@@ -447,7 +395,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         h = self.harness(resync_interval=0.05)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         await socket.emit(raw(KEYFRAME_HEX))
@@ -462,7 +410,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_duplicates_are_ignored_without_a_resync(self) -> None:
         h = self.harness()
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         for message in (KEYFRAME_HEX, UPDATE_HEX, UPDATE_HEX, UPDATE_HEX):
@@ -477,7 +425,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
         self,
     ) -> None:
         h = self.harness()
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         first = await h.ready()
         await first.emit(raw(KEYFRAME_HEX))
@@ -509,7 +457,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
                 h = self.harness(
                     plans=[[{"op": "nack", "id": None, "code": code, "reason": reason}]]
                 )
-                book = h.stream.gex_book("SPY")
+                book = h.stream._book_feed("SPY")
                 await book.start()
                 with self.assertRaises(StreamError) as caught:
                     await asyncio.wait_for(anext(book), 1)
@@ -533,7 +481,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
                 )
             ]
         )
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         with self.assertRaises(StreamError) as caught:
             await asyncio.wait_for(anext(book), 1)
@@ -562,7 +510,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             max_reconnect=0,
         )
         started = time.monotonic()
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         await h.ready()
         self.assertEqual(h.tickets, 2)
@@ -584,7 +532,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             connection_limit_backoff=0.1,
             rng=lambda: 0.0,
         )
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         await h.ready(2)
         self.assertGreaterEqual(h.connected_at[1] - h.connected_at[0], 0.1)
@@ -604,7 +552,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             connection_limit_backoff=0.1,
             rng=lambda: 1.0,
         )
-        book2 = h2.stream.gex_book("SPY")
+        book2 = h2.stream._book_feed("SPY")
         await book2.start()
         await h2.ready(2)
         self.assertGreaterEqual(h2.connected_at[1] - h2.connected_at[0], 0.15)
@@ -614,7 +562,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(code=code):
                 # Without the hint the default wait would be 5 s.
                 h = self.harness(min_reconnect=5, max_reconnect=10, rng=lambda: 1.0)
-                book = h.stream.gex_book("SPY")
+                book = h.stream._book_feed("SPY")
                 await book.start()
                 first = await h.ready()
                 sent_at = time.monotonic()
@@ -628,7 +576,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reauth_reconnects_immediately_with_a_new_ticket(self) -> None:
         h = self.harness(min_reconnect=5, max_reconnect=10, rng=lambda: 1.0)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         first = await h.ready()
         sent_at = time.monotonic()
@@ -646,7 +594,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             max_reconnect=10,
             rng=lambda: 1.0,
         )
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         await h.ready(2)
         self.assertGreaterEqual(h.connected_at[1] - h.connected_at[0], 0.1)
@@ -668,7 +616,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             rng=full(1.0),
         )
         started = time.monotonic()
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         await h.ready()
         # Two failures: caps 0.02 then 0.04, both at the top of the jitter range.
@@ -682,14 +630,14 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
             max_reconnect=10,
             rng=full(0.0),
         )
-        lucky_book = lucky.stream.gex_book("SPY")
+        lucky_book = lucky.stream._book_feed("SPY")
         await lucky_book.start()
         await lucky.ready()
         self.assertLess(lucky.connected_at[0] - started, 1.0)
 
     async def test_answers_server_pings_and_sends_its_own(self) -> None:
         h = self.harness(ping_interval=0.05, dead_after=5)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         await socket.emit(json.dumps({"op": "ping"}))
@@ -698,7 +646,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_silence_is_treated_as_a_dead_connection(self) -> None:
         h = self.harness(ping_interval=0.05, dead_after=0.2)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         first = await h.ready()
         await h.ready(2)
@@ -707,7 +655,7 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_traffic_keeps_a_connection_alive(self) -> None:
         h = self.harness(ping_interval=0.05, dead_after=0.2)
-        book = h.stream.gex_book("SPY")
+        book = h.stream._book_feed("SPY")
         await book.start()
         socket = await h.ready()
         for _ in range(10):
@@ -718,8 +666,8 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_one_connection_carries_every_book(self) -> None:
         h = self.harness()
-        spy = h.stream.gex_book("SPY")
-        qqq = h.stream.gex_book("QQQ")
+        spy = h.stream._book_feed("SPY")
+        qqq = h.stream._book_feed("QQQ")
         await spy.start()
         await qqq.start()
         await wait_until(lambda: len(h.sockets) == 1 and len(subs(h.sockets[0])) == 2)
@@ -735,8 +683,8 @@ class KeyedStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_subscription_refusal_fails_only_that_subscription(self) -> None:
         h = self.harness()
-        spy = h.stream.gex_book("SPY")
-        qqq = h.stream.gex_book("QQQ")
+        spy = h.stream._book_feed("SPY")
+        qqq = h.stream._book_feed("QQQ")
         await spy.start()
         await qqq.start()
         await wait_until(lambda: len(h.sockets) == 1 and len(subs(h.sockets[0])) == 2)
@@ -799,7 +747,7 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
 
         async with (
             self.client("itm_test", mint, sockets, options) as client,
-            client.stream.gex_book("SPY") as book,
+            client.stream._book_feed("SPY") as book,
         ):
             await wait_until(lambda: sockets and subs(sockets[0]))
             auth = sockets[0].sent[0]
@@ -827,7 +775,7 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
 
         async with self.client("session-token", mint, sockets, options) as client:
             with self.assertRaises(StreamError) as caught:
-                await client.stream.gex_book("SPY").start()
+                await client.stream._book_feed("SPY").start()
             self.assertEqual(caught.exception.reason, "api_key_required")
             self.assertEqual(calls, 0)
             async with client.stream.spot("SPY"):
@@ -855,7 +803,7 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
 
         async with (
             self.client("itm_test", mint, sockets, options) as client,
-            client.stream.gex_book("SPY"),
+            client.stream._book_feed("SPY"),
         ):
             await wait_until(lambda: sockets and subs(sockets[0]))
         self.assertEqual(len(calls), 2)
@@ -882,7 +830,7 @@ class KeyedClientTests(unittest.IsolatedAsyncioTestCase):
 
         async with (
             self.client("itm_test", mint, sockets, options) as client,
-            client.stream.gex_book("SPY") as book,
+            client.stream._book_feed("SPY") as book,
         ):
             with self.assertRaises(StreamError) as caught:
                 await asyncio.wait_for(anext(book), 1)
@@ -928,7 +876,7 @@ class RealSocketTests(unittest.IsolatedAsyncioTestCase):
                 client=CLIENT,
             )
             try:
-                async with stream.gex_book("SPY") as book:
+                async with stream._book_feed("SPY") as book:
                     first = await asyncio.wait_for(anext(book), 5)
                     second = await asyncio.wait_for(anext(book), 5)
             finally:

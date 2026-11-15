@@ -1,15 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  all,
-  between,
-  filters,
-  nearest,
-  streamWire,
-  top,
-  withinPct,
-  type GexBookState,
-} from "../src/index.js";
+import { streamWire } from "../src/index.js";
+import { all, between, buildFilter, nearest, top, withinPct } from "../src/filters.js";
+import type { GexBookState } from "../src/gexBook.js";
 import { GexBookTracker } from "../src/gexBook.js";
 
 const VECTORS = JSON.parse(
@@ -126,11 +119,12 @@ describe("filters", () => {
     expect(() => between(610, 600)).toThrow(RangeError);
   });
 
-  it("is exported both by name and as the filters namespace", () => {
-    expect(filters.nearest).toBe(nearest);
-    expect(filters.withinPct).toBe(withinPct);
-    expect(filters.between).toBe(between);
-    expect(filters.top).toBe(top);
-    expect(filters.all).toBe(all);
+  it("builds from the options object of stream.gex", () => {
+    expect(buildFilter({})).toBeUndefined();
+    expect(() => buildFilter({ nearest: 3, within: 0.1 })).toThrow(RangeError);
+    expect(() => buildFilter({ by: "net" })).toThrow(RangeError);
+    expect(() => buildFilter({ near: 3 } as never)).toThrow(TypeError);
+    expect(() => buildFilter({ between: 600 as never })).toThrow(TypeError);
+    expect(() => buildFilter({ within: "5%" as never })).toThrow(TypeError);
   });
 });

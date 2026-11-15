@@ -2,9 +2,30 @@
 
 Changes to the ITMatrixHQ Python and TypeScript SDKs. The two versions move together.
 
+## 1.2.0 — unreleased
+
+Pinned to API contract 2.20.0. Streaming GEX with an API key starts here: the 1.1.0 stream interface is replaced, and 1.1.0 should not be used for streaming.
+
+Added
+- A live GEX book per symbol, in both languages. `client.stream.gex("SPY", nearest=20)` (TypeScript `client.stream.gex("SPY", { nearest: 20 })`) returns at once and connects in the background. It needs an `itm_` API key on API Explorer or API Pro.
+- `latest` holds the newest book and `age` its age in seconds. `on("update" | "error" | "status", handler)` registers handlers and returns a function that removes them. `await ready()` gives the first book and `await changed()` the next one. `update(...)` changes the filter, and `close()` ends the book. `async with` and `async for` work in Python, and `for await` and `await using` work in TypeScript where the runtime supports it.
+- Status is `connecting`, `live`, `reconnecting` or `closed`. A handler that raises is reported as an `error` event and never stops the stream. A refusal that retrying cannot fix is an `error` with a `StreamError`, then `closed`.
+- Delivery is conflated everywhere: a slow handler or reader gets the newest book, never a backlog. An async handler runs one call at a time.
+- Every live book on a client shares one connection. The connection closes with the last book, and closing the client closes every book. Each symbol is its own object, and there is no ordering promise across symbols.
+- A book iterates rows with `strike`, `call`, `put` and `total`, and has `symbol`, `spot`, `net_gex` (`netGex`), `flip`, `time`, `age`, `get(strike)`, the columns and `meta` (`book_id`, `version`, the strikes that `changed`, and `reason`). Python adds `df()` for pandas. TypeScript adds `rows` and typed-array `columns`.
+- Filters are keyword arguments (an options object in TypeScript): `nearest`, `within` (a fraction of spot), `between` and `top` with `by`.
+- `client.run()` waits until every live book on the client has closed, and returns at once when none is open. It is the usual last line of a streaming script. In Python, Ctrl-C closes every book and `run()` returns normally, and cancelling it closes every book. TypeScript's `run()` installs no signal handler: close the client on `SIGINT`.
+- The blocking Python `ITMClient` gets `client.stream.gex(...)` too. `ready()` and `changed()` block. Handlers run one at a time on the book's own thread, or on an executor you pass with `on("update", fn, executor=pool)`, never on the network loop.
+
+Removed
+- The 1.1.0 stream interface: `stream.gex_book` and `stream.gexBook`, `GexBookSubscription`, `GexBookState` as a public type, `set_filter` and `setFilter`, the `itmatrix.filters` module and the TypeScript filter function exports.
+
+Changed
+- `stream.gex(...)` now opens a live book and needs an API key. Signed-in sessions that read raw 1.0.0 GEX frames use `stream.subscribe("gex", symbol=...)` (TypeScript `stream.subscribe("gex", { symbol })`), which is unchanged.
+
 ## 1.1.0 — 2026-11-14
 
-Pinned to API contract 2.20.0. Streaming GEX with an API key needs this release. The API refuses 1.0.0.
+Pinned to API contract 2.20.0. Superseded for streaming by 1.2.0: its `gex_book` / `gexBook` interface is removed there. Its REST additions carry over unchanged.
 
 Added
 - GEX book stream for API keys, in both languages. API Explorer and API Pro keys can stream it. `stream.gex_book(symbol)` in Python and `stream.gexBook(symbol)` in TypeScript yield a `GexBookState` after every keyframe or update. It needs an `itm_` API key. Any other credential raises a `StreamError` with the reason `api_key_required`.

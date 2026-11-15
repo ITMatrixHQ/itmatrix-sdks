@@ -152,6 +152,24 @@ export class ITMClient<T extends Transport = "json"> {
     this.streamInstance?.close();
   }
 
+  /**
+   * Resolves when every live book on this client has closed, at once when
+   * none is open. The usual last line of a streaming script:
+   *
+   * ```ts
+   * const spy = client.stream.gex("SPY", { nearest: 20 });
+   * spy.on("update", show);
+   * process.on("SIGINT", () => client.close()); // Ctrl-C closes every book
+   * await client.run();
+   * ```
+   *
+   * `run()` does not install signal handlers. Closing the client, or each
+   * book, ends it.
+   */
+  run(): Promise<void> {
+    return this.streamInstance?.run() ?? Promise.resolve();
+  }
+
   constructor(options: ClientOptions<T> = {} as ClientOptions<T>) {
     if (options.transport !== undefined && !["json", "protobuf"].includes(options.transport)) {
       throw new TypeError(`unsupported transport ${String(options.transport)}`);

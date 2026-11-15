@@ -1,8 +1,8 @@
 """One shared, reconnecting protobuf WebSocket.
 
 An ``itm_`` API key connects with protocol 8, the ``itmatrixhq.v1`` subprotocol
-and a declared client name, and may subscribe to ``gex`` books. Any other
-credential keeps the 1.0.0 protocol.
+and a declared client name, and may open live GEX books (:meth:`Stream.gex`).
+Any other credential keeps the 1.0.0 protocol and :meth:`Stream.subscribe`.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ import contextlib
 import inspect
 import json
 import random
+import signal
+import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -22,7 +24,8 @@ from typing_extensions import Self, TypeVar
 
 from ._wire.ws_pb2 import Frame
 from .errors import ITMError
-from .gex_book import GexBookFilter, GexBookState, GexBookTracker
+from .gex_book import GexBookState, GexBookTracker
+from .live import LiveGex, _Dispatch
 from .version import client_name
 
 _STOP = object()
@@ -159,6 +162,9 @@ class Subscription(AsyncIterator[T]):
     def _on_connect(self) -> None:
         """Called each time the connection is (re)established."""
 
+    def _on_disconnect(self) -> None:
+        """Called when the connection drops and a reconnect follows."""
+
     def _put(self, value: Any) -> None:
         try:
             self._queue.put_nowait(value)
@@ -181,75 +187,62 @@ class Subscription(AsyncIterator[T]):
         _replace_queue(self._queue, _STOP)
 
 
-class GexBookSubscription(Subscription[GexBookState]):
-    """A reconstructed GEX book.
+class _BookFeed(Subscription[GexBookState]):
+    """One symbol's reconstructed GEX book on the shared connection.
 
-    Yields a ``GexBookState`` after every applied frame, passed through the
-    subscription's filter when it has one. :meth:`set_filter` swaps the filter
-    on the live subscription without resubscribing.
+    With an owner (a :class:`LiveGex`) every applied state, failure and
+    connection change goes to the owner. Without one it is an async iterator of
+    states, which the transport tests use.
     """
 
     def __init__(
         self,
         stream: Stream,
         sub_id: str,
-        topic: str,
         options: SubscribeOptions,
         maximum: int,
-        filter: GexBookFilter | None = None,
+        owner: LiveGex | None = None,
     ) -> None:
-        super().__init__(stream, sub_id, topic, options, maximum)
-        self._book = GexBookTracker(options.symbol)
-        self._filter = _check_filter(filter)
-
-    @property
-    def filter(self) -> GexBookFilter | None:
-        """The filter applied to every yielded state, or ``None`` for the whole book."""
-        return self._filter
-
-    def set_filter(self, filter: GexBookFilter | None) -> None:
-        """Filter every state yielded from now on; ``None`` yields the whole book.
-
-        The server subscription is unchanged. States already waiting in the
-        queue keep the filter they were yielded with; :attr:`view` gives the
-        current book under the new filter straight away.
-        """
-        self._filter = _check_filter(filter)
-
-    @property
-    def state(self) -> GexBookState | None:
-        """The latest whole book, unfiltered, or ``None`` before the first keyframe."""
-        return self._book.state
-
-    @property
-    def view(self) -> GexBookState | None:
-        """The latest book under the current filter, or ``None`` before a keyframe."""
-        state = self._book.state
-        if state is None or self._filter is None:
-            return state
-        return self._filter(state)
+        super().__init__(stream, sub_id, "gex", options, maximum)
+        self.book = GexBookTracker(options.symbol)
+        self._owner = owner
 
     def _feed(self, frame: Frame) -> None:
         if not self._active or frame.symbol != self.options.symbol:
             return
-        state, resync = self._book.apply(frame)
+        state, resync = self.book.apply(frame)
         if resync:
             self._stream._request_resync(self)
         if state is None:
             return
-        if self._filter is not None:
-            try:
-                state = self._filter(state)
-            except Exception as error:  # noqa: BLE001
-                # A caller's filter failed: end this subscription with its error.
-                self._fail(error)
-                asyncio.create_task(self._stream._remove(self))
-                return
-        self._put(state)
+        if self._owner is not None:
+            self._owner._publish(state)
+        else:
+            self._put(state)
 
     def _on_connect(self) -> None:
         # A new connection starts with a keyframe. Nothing before it applies.
-        self._book.reset()
+        self.book.reset()
+        if self._owner is not None:
+            self._owner._connected()
+
+    def _on_disconnect(self) -> None:
+        if self._owner is not None:
+            self._owner._disconnected()
+
+    def _fail(self, error: BaseException) -> None:
+        if self._owner is not None:
+            self._active = False
+            self._owner._fail(error)
+        else:
+            super()._fail(error)
+
+    def _finish(self) -> None:
+        if self._owner is not None:
+            self._active = False
+            self._owner._finish(None)
+        else:
+            super()._finish()
 
 
 class Stream:
@@ -305,6 +298,9 @@ class Stream:
         self._reconnect_after: float | None = None
         self._last_rx = time.monotonic()
         self._resync_sent: dict[str, float] = {}
+        # Open live books, and the futures of run() calls waiting for none.
+        self._live: set[LiveGex] = set()
+        self._idle: list[asyncio.Future[None]] = []
 
     def subscribe(
         self,
@@ -357,35 +353,98 @@ class Stream:
     def spot(self, symbol: str) -> Subscription:
         return self.subscribe("spot", symbol=symbol)
 
-    def gex(self, symbol: str, **options: Any) -> Subscription:
-        return self.subscribe("gex", symbol=symbol, **options)
+    def gex(
+        self,
+        symbol: str,
+        *,
+        nearest: int | None = None,
+        within: float | None = None,
+        between: tuple[float, float] | None = None,
+        top: int | None = None,
+        by: str | None = None,
+    ) -> LiveGex:
+        """The live GEX book of one symbol. Requires an ``itm_`` API key.
 
-    def gex_book(
-        self, symbol: str, filter: GexBookFilter | None = None
-    ) -> GexBookSubscription:
-        """Stream a live GEX book for one underlying. Requires an ``itm_`` API key.
+        Returns at once and connects in the background. ``latest`` holds the
+        newest :class:`Book`, ``on("update", fn)`` calls ``fn`` with each new
+        one, ``await live.changed()`` waits for the next. Filters:
+        ``nearest=20``, ``within=0.05`` (5% of spot) or ``between=(590, 610)``,
+        optionally with ``top=10`` (``by="gross"``, ``"net"``, ``"call"`` or
+        ``"put"``). Change them later with ``live.update(...)``. Each symbol is
+        its own object, and every object on a client shares one connection.
 
-        ``async with stream.gex_book("SPY") as book`` then ``async for state in
-        book`` yields a :class:`GexBookState` after every applied keyframe or
-        update. The SDK keeps the book correct: it checks versions and the CRC,
-        asks for a fresh keyframe when they disagree, and reconnects with the
-        backoff the service asks for. Terminal refusals raise
-        :class:`StreamError` from the iterator.
-
-        ``filter`` (see :mod:`itmatrix.filters`, for example ``nearest(20)``)
-        narrows every yielded state to a subset of the book's strikes;
-        ``book.set_filter(...)`` swaps it on the live subscription.
+        Token sessions use ``subscribe("gex", symbol=...)`` for the 1.0.0 frames.
         """
+        return self._live_gex(
+            symbol,
+            {"nearest": nearest, "within": within, "between": between, "top": top, "by": by},
+        )
+
+    def _live_gex(
+        self, symbol: str, options: dict[str, Any], dispatch: _Dispatch | None = None
+    ) -> LiveGex:
+        if not isinstance(symbol, str):
+            raise TypeError("pass one symbol; open one live book per symbol")
+        if not symbol.strip():
+            raise ValueError("symbol is required")
+        options = {k: v for k, v in options.items() if v is not None}
+        return LiveGex(self, symbol.strip().upper(), options, dispatch)
+
+    def _book_feed(self, symbol: str, owner: LiveGex | None = None) -> _BookFeed:
         if not symbol:
             raise ValueError("symbol is required")
-        return GexBookSubscription(
-            self,
-            self._new_id(),
-            "gex",
-            SubscribeOptions(symbol.upper()),
-            self._max_queue,
-            filter,
+        return _BookFeed(
+            self, self._new_id(), SubscribeOptions(symbol.upper()), self._max_queue, owner
         )
+
+    # -- live books and run() -----------------------------------------------
+
+    def _live_add(self, book: LiveGex) -> None:
+        self._live.add(book)
+
+    def _live_done(self, book: LiveGex) -> None:
+        self._live.discard(book)
+        if not self._live:
+            idle, self._idle = self._idle, []
+            for future in idle:
+                if not future.done():
+                    future.set_result(None)
+
+    async def _close_live(self) -> None:
+        books = list(self._live)
+        await asyncio.gather(*(book.aclose() for book in books), return_exceptions=True)
+
+    async def run(self) -> None:
+        """Run until every live book on this stream has closed.
+
+        Returns at once when none is open. Ctrl-C (SIGINT, on the main thread
+        of a POSIX event loop) closes every live book and then returns
+        normally. Cancelling the call closes every live book and re-raises.
+        """
+        if not self._live:
+            return
+        loop = asyncio.get_running_loop()
+        idle: asyncio.Future[None] = loop.create_future()
+        self._idle.append(idle)
+        closing: list[asyncio.Task[None]] = []
+
+        def interrupt() -> None:
+            if not closing:
+                closing.append(loop.create_task(self._close_live()))
+
+        handled = _catch_sigint(loop, interrupt)
+        try:
+            await idle
+            if closing:
+                await closing[0]
+        except asyncio.CancelledError:
+            await asyncio.shield(self._close_live())
+            raise
+        finally:
+            if handled:
+                loop.remove_signal_handler(signal.SIGINT)
+            if idle in self._idle:
+                self._idle.remove(idle)
 
     def chain(self, symbol: str, **options: Any) -> Subscription:
         return self.subscribe("chain", symbol=symbol, **options)
@@ -427,13 +486,16 @@ class Stream:
 
     async def _start(self, subscription: Subscription[Any]) -> None:
         self._closed = False
-        if isinstance(subscription, GexBookSubscription):
+        if isinstance(subscription, _BookFeed):
             if not await self._uses_key():
                 raise StreamError(
                     code="invalid_params",
                     reason="api_key_required",
                     terminal=True,
-                    message="gex_book needs an itm_ API key; token sessions use stream.gex()",
+                    message=(
+                        "live GEX books need an itm_ API key; "
+                        'token sessions use stream.subscribe("gex", symbol=...)'
+                    ),
                 )
             async with self._lock:
                 self._subscriptions[subscription.id] = subscription
@@ -586,6 +648,8 @@ class Stream:
                 if self._heartbeat is not None:
                     self._heartbeat.cancel()
                 if not self._closed and self._subscriptions:
+                    for subscription in list(self._subscriptions.values()):
+                        subscription._on_disconnect()
                     self._schedule_reconnect()
 
     async def _beat(self, socket: Any) -> None:
@@ -726,14 +790,6 @@ class Stream:
         self._resync_sent.clear()
 
 
-def _check_filter(filter: GexBookFilter | None) -> GexBookFilter | None:
-    if filter is not None and not callable(filter):
-        raise TypeError(
-            "filter must be a function of a GexBookState, such as itmatrix.filters.nearest(20)"
-        )
-    return filter
-
-
 def _client_name() -> str:
     return client_name()
 
@@ -833,3 +889,16 @@ def _replace_queue(
     while not queue.empty():
         queue.get_nowait()
     queue.put_nowait(value)
+
+
+def _catch_sigint(loop: asyncio.AbstractEventLoop, callback: Callable[[], None]) -> bool:
+    """Route SIGINT to ``callback`` while run() waits. False where unsupported
+    (Windows loops, a thread other than the main one): Ctrl-C then cancels the
+    caller as usual, and run() still closes every live book."""
+    if threading.current_thread() is not threading.main_thread():
+        return False
+    try:
+        loop.add_signal_handler(signal.SIGINT, callback)
+    except (NotImplementedError, RuntimeError, ValueError):
+        return False
+    return True
